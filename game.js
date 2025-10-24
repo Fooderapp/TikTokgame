@@ -389,16 +389,16 @@ class Character {
         const spawnZ = (Math.random() - 0.5) * 6; // Narrower Z range
         const spawnY = -2; // Just above platform surface (platform top is at -4, character radius 1.2)
         
-        // Physics body - use cylinder for upright standing (Gang Beasts style)
-        // This prevents rolling and keeps characters standing upright
-        const bodyShape = new CANNON.Cylinder(0.6, 0.6, 2.4, 12);
+        // Physics body - use capsule-like shape for upright standing (Gang Beasts style)
+        // Box shape prevents rolling and keeps characters standing upright
+        const bodyShape = new CANNON.Box(new CANNON.Vec3(0.6, 1.2, 0.6));
         this.body = new CANNON.Body({
             mass: 5,
             shape: bodyShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.5, // More damping for controlled movement
-            angularDamping: 0.9, // High angular damping to stay upright
-            fixedRotation: false // Allow rotation but heavily damped
+            linearDamping: 0.3, // Reduced damping for more responsive movement
+            angularDamping: 0.8, // Still high to reduce spinning
+            fixedRotation: false // Allow rotation but controlled
         });
         
         // Add friction for better ground contact
@@ -514,32 +514,34 @@ class Character {
     }
     
     stabilizeUpright() {
-        // Apply corrective torque to keep character standing upright (like Gang Beasts)
-        const targetUp = new CANNON.Vec3(0, 1, 0);
-        const currentUp = new CANNON.Vec3(0, 1, 0);
-        this.body.quaternion.vmult(currentUp, currentUp);
+        // Simplified stabilization - less aggressive to allow movement (Gang Beasts style)
+        // Just limit excessive rotation, don't force perfectly upright
+        const maxTilt = 0.3; // Allow some tilt for dynamic movement
         
-        // Calculate angle from upright
-        const dot = currentUp.dot(targetUp);
-        if (dot < 0.95) {
-            // Apply corrective angular velocity
-            const correctionAxis = new CANNON.Vec3();
-            currentUp.cross(targetUp, correctionAxis);
-            correctionAxis.normalize();
-            
-            const correctionStrength = (1 - dot) * 5; // Stronger correction when more tilted
-            const correction = correctionAxis.scale(correctionStrength);
-            
-            this.body.angularVelocity.x = correction.x;
-            this.body.angularVelocity.z = correction.z;
-            // Keep some y rotation for turning
+        // Only correct if tilted too much
+        const tiltX = Math.abs(this.body.quaternion.x);
+        const tiltZ = Math.abs(this.body.quaternion.z);
+        
+        if (tiltX > maxTilt) {
+            this.body.angularVelocity.x *= 0.5; // Dampen tilting
+        }
+        if (tiltZ > maxTilt) {
+            this.body.angularVelocity.z *= 0.5;
         }
         
-        // Limit angular velocity to prevent spinning
-        const maxAngularVel = 3;
-        if (this.body.angularVelocity.length() > maxAngularVel) {
-            this.body.angularVelocity.normalize();
-            this.body.angularVelocity.scale(maxAngularVel, this.body.angularVelocity);
+        // Limit overall angular velocity
+        const maxAngularVel = 4;
+        const angVelLength = Math.sqrt(
+            this.body.angularVelocity.x ** 2 +
+            this.body.angularVelocity.y ** 2 +
+            this.body.angularVelocity.z ** 2
+        );
+        
+        if (angVelLength > maxAngularVel) {
+            const scale = maxAngularVel / angVelLength;
+            this.body.angularVelocity.x *= scale;
+            this.body.angularVelocity.y *= scale;
+            this.body.angularVelocity.z *= scale;
         }
     }
     
@@ -730,11 +732,11 @@ class Character {
         direction.y = 0; // Don't move vertically
         direction.normalize();
         
-        const force = direction.scale(100 * this.speed); // Increased force for more responsiveness
+        const force = direction.scale(150 * this.speed); // Increased force for better responsiveness
         this.body.applyForce(force, this.body.position);
         
         // Limit speed
-        const maxSpeed = 10 * this.speed; // Increased max speed
+        const maxSpeed = 12 * this.speed; // Increased max speed for more action
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
