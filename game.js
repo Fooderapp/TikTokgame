@@ -384,9 +384,14 @@ class Character {
         // Ragdoll-like character using connected shapes
         const color = this.team === 'blue' ? 0x4A90E2 : 0xE24A4A;
         
-        // Main body (torso) - using box geometry
-        const bodyGeometry = new THREE.BoxGeometry(1.5, 2, 1);
-        const bodyMaterial = new THREE.MeshPhongMaterial({ color: color });
+        // Main body (torso) - using rounded box for cartoon style
+        const bodyGeometry = new THREE.BoxGeometry(1.8, 2.2, 1.4);
+        // Round the edges for more cartoon look
+        bodyGeometry.translate(0, 0, 0);
+        const bodyMaterial = new THREE.MeshPhongMaterial({ 
+            color: color,
+            shininess: 60  // More shiny for cartoon effect
+        });
         this.mesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
         this.mesh.castShadow = true;
         this.game.scene.add(this.mesh);
@@ -422,16 +427,34 @@ class Character {
         this.lastHitTime = 0;
         this.isStunned = false;
         
-        // Add head
-        const headGeometry = new THREE.SphereGeometry(0.6, 16, 16);
-        const headMaterial = new THREE.MeshPhongMaterial({ color: 0xFFDBAC });
+        // Add head - make it bigger and rounder for cartoon style
+        const headGeometry = new THREE.SphereGeometry(0.85, 12, 12); // Larger, lower poly for cartoon
+        const headMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xFFDBAC,
+            shininess: 80  // Shinier for cartoon look
+        });
         this.head = new THREE.Mesh(headGeometry, headMaterial);
-        this.head.position.y = 1.5;
+        this.head.position.y = 1.8; // Adjusted for larger head
         this.mesh.add(this.head);
         
-        // Add arms using cylinders
-        const armGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 8);
-        const armMaterial = new THREE.MeshPhongMaterial({ color: color });
+        // Add simple cartoon eyes
+        const eyeGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+        const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+        
+        this.leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        this.leftEye.position.set(-0.25, 0.15, 0.7);
+        this.head.add(this.leftEye);
+        
+        this.rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        this.rightEye.position.set(0.25, 0.15, 0.7);
+        this.head.add(this.rightEye);
+        
+        // Add arms using cylinders - make them stubbier for cartoon style
+        const armGeometry = new THREE.CylinderGeometry(0.35, 0.35, 1.0, 8); // Shorter, thicker
+        const armMaterial = new THREE.MeshPhongMaterial({ 
+            color: color,
+            shininess: 60
+        });
         
         this.leftArm = new THREE.Mesh(armGeometry, armMaterial);
         this.leftArm.position.set(-1, 0.5, 0);
@@ -443,9 +466,12 @@ class Character {
         this.rightArm.rotation.z = -Math.PI / 4;
         this.mesh.add(this.rightArm);
         
-        // Add legs using cylinders
-        const legGeometry = new THREE.CylinderGeometry(0.35, 0.35, 1.5, 8);
-        const legMaterial = new THREE.MeshPhongMaterial({ color: color });
+        // Add legs using cylinders - make them shorter and thicker for cartoon style
+        const legGeometry = new THREE.CylinderGeometry(0.4, 0.4, 1.3, 8); // Shorter, thicker
+        const legMaterial = new THREE.MeshPhongMaterial({ 
+            color: color,
+            shininess: 60
+        });
         
         this.leftLeg = new THREE.Mesh(legGeometry, legMaterial);
         this.leftLeg.position.set(-0.5, -1.5, 0);
@@ -690,6 +716,31 @@ class Character {
     }
     
     attackEnemy() {
+        // Periodically check for closer enemies (every 60 frames ~1 second)
+        if (this.aiTimer % 60 === 0) {
+            let nearestEnemy = null;
+            let nearestDistance = Infinity;
+            
+            for (const char of this.game.characters) {
+                if (char.team !== this.team && char.isAlive && !char.isKnockedOut) {
+                    const dist = this.body.position.distanceTo(char.body.position);
+                    if (dist < nearestDistance) {
+                        nearestDistance = dist;
+                        nearestEnemy = char;
+                    }
+                }
+            }
+            
+            // Switch to closer enemy if found
+            if (nearestEnemy && nearestEnemy !== this.aiTarget) {
+                const currentDistance = this.body.position.distanceTo(this.aiTarget.body.position);
+                // Switch if new enemy is significantly closer (more than 3 units closer)
+                if (nearestDistance < currentDistance - 3) {
+                    this.aiTarget = nearestEnemy;
+                }
+            }
+        }
+        
         if (!this.aiTarget || !this.aiTarget.isAlive || this.aiTarget.isKnockedOut) {
             this.changeAIState('seeking');
             return;
