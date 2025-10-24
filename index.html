@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TikTok Battle Arena - 3D Physics Fighter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .score-container {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 20px;
+        }
+        
+        .team-score {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            min-width: 120px;
+        }
+        
+        .blue-team {
+            border: 3px solid #4A90E2;
+        }
+        
+        .red-team {
+            border: 3px solid #E24A4A;
+        }
+        
+        .team-score .label {
+            font-size: 14px;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+        
+        .team-score .points {
+            font-size: 32px;
+        }
+        
+        #roundInfo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px 50px;
+            border-radius: 15px;
+            color: white;
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            pointer-events: none;
+        }
+        
+        #giftSpawner {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: all;
+        }
+        
+        .gift-button {
+            margin: 5px;
+            padding: 15px 25px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        
+        .gift-button:active {
+            transform: scale(0.95);
+        }
+        
+        .blue-spawn {
+            background: linear-gradient(135deg, #4A90E2, #357ABD);
+            color: white;
+        }
+        
+        .red-spawn {
+            background: linear-gradient(135deg, #E24A4A, #C93A3A);
+            color: white;
+        }
+        
+        .power-spawn {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #333;
+        }
+        
+        #characterCounter {
+            position: absolute;
+            top: 120px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 20px;
+        }
+        
+        .character-count {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <div class="score-container">
+            <div class="team-score blue-team">
+                <div class="label">BLUE TEAM</div>
+                <div class="points" id="blueScore">0</div>
+            </div>
+            <div class="team-score red-team">
+                <div class="label">RED TEAM</div>
+                <div class="points" id="redScore">0</div>
+            </div>
+        </div>
+        
+        <div id="characterCounter">
+            <div class="character-count" style="color: #4A90E2;">
+                Blue: <span id="blueCount">0</span>
+            </div>
+            <div class="character-count" style="color: #E24A4A;">
+                Red: <span id="redCount">0</span>
+            </div>
+        </div>
+        
+        <div id="roundInfo"></div>
+        
+        <div id="controls">
+            Camera: Drag to rotate | Pinch to zoom<br>
+            AI characters fight automatically
+        </div>
+        
+        <div id="giftSpawner">
+            <button class="gift-button blue-spawn" onclick="game.spawnCharacter('blue')">
+                🎁 Spawn Blue Fighter
+            </button>
+            <button class="gift-button red-spawn" onclick="game.spawnCharacter('red')">
+                🎁 Spawn Red Fighter
+            </button>
+            <button class="gift-button power-spawn" onclick="game.giveRandomPower()">
+                ⚡ Power Boost
+            </button>
+        </div>
+    </div>
+    
+    <script src="lib/three.min.js"></script>
+    <script src="lib/cannon.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
