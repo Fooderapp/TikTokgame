@@ -120,10 +120,13 @@ class Game {
         );
         // Better initial camera position - closer to the action
         // Adjust based on aspect ratio for responsive design
-        const aspectRatio = this.width / this.height;
-        let cameraZ = aspectRatio > 1 ? 35 : 45; // Closer for landscape, further for portrait
+        const cameraZ = this.getAspectRatio() > 1 ? 35 : 45; // Closer for landscape, further for portrait
         this.camera.position.set(0, 20, cameraZ);
         this.camera.lookAt(0, -2, 0); // Look at platform level
+    }
+    
+    getAspectRatio() {
+        return this.width / this.height;
     }
     
     setupLights() {
@@ -152,8 +155,7 @@ class Game {
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         let cameraRotation = { x: 0.35, y: 0 }; // Slightly lower angle for better view
-        const aspectRatio = this.width / this.height;
-        let cameraDistance = aspectRatio > 1 ? 35 : 45; // Match camera setup
+        let cameraDistance = this.getAspectRatio() > 1 ? 35 : 45; // Match camera setup
         
         const canvas = this.renderer.domElement;
         
@@ -1333,6 +1335,8 @@ window.addEventListener('load', () => {
 // Handle window resize
 window.addEventListener('resize', () => {
     if (game) {
+        game.width = window.innerWidth;
+        game.height = window.innerHeight;
         game.renderer.setSize(window.innerWidth, window.innerHeight);
         game.camera.aspect = window.innerWidth / window.innerHeight;
         game.camera.updateProjectionMatrix();
