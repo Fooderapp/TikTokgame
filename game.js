@@ -13,9 +13,9 @@ class Game {
         this.redScore = 0;
         this.roundActive = false;
         
-        // Viewport settings for mobile (portrait)
-        this.width = 1080;
-        this.height = 1920;
+        // Responsive viewport settings
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
         
         this.init();
     }
@@ -118,7 +118,11 @@ class Game {
             0.1,
             1000
         );
-        this.camera.position.set(0, 25, 45); // Higher and better angle
+        // Better initial camera position - closer to the action
+        // Adjust based on aspect ratio for responsive design
+        const aspectRatio = this.width / this.height;
+        let cameraZ = aspectRatio > 1 ? 35 : 45; // Closer for landscape, further for portrait
+        this.camera.position.set(0, 20, cameraZ);
         this.camera.lookAt(0, -2, 0); // Look at platform level
     }
     
@@ -147,8 +151,9 @@ class Game {
     setupControls() {
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
-        let cameraRotation = { x: 0.4, y: 0 }; // Better starting angle
-        let cameraDistance = 45; // Match new camera distance
+        let cameraRotation = { x: 0.35, y: 0 }; // Slightly lower angle for better view
+        const aspectRatio = this.width / this.height;
+        let cameraDistance = aspectRatio > 1 ? 35 : 45; // Match camera setup
         
         const canvas = this.renderer.domElement;
         
@@ -225,7 +230,7 @@ class Game {
         // Update camera position based on rotation
         this.updateCamera = () => {
             this.camera.position.x = Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
-            this.camera.position.y = Math.sin(cameraRotation.x) * cameraDistance + 15; // Higher base height
+            this.camera.position.y = Math.sin(cameraRotation.x) * cameraDistance + 10; // Lower base for better view
             this.camera.position.z = Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
             this.camera.lookAt(0, -2, 0); // Look at platform level
         };
