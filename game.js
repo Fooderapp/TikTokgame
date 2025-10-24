@@ -118,8 +118,8 @@ class Game {
             0.1,
             1000
         );
-        this.camera.position.set(0, 20, 40);
-        this.camera.lookAt(0, 0, 0);
+        this.camera.position.set(0, 25, 45); // Higher and better angle
+        this.camera.lookAt(0, -2, 0); // Look at platform level
     }
     
     setupLights() {
@@ -147,8 +147,8 @@ class Game {
     setupControls() {
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
-        let cameraRotation = { x: 0.3, y: 0 };
-        let cameraDistance = 40;
+        let cameraRotation = { x: 0.4, y: 0 }; // Better starting angle
+        let cameraDistance = 45; // Match new camera distance
         
         const canvas = this.renderer.domElement;
         
@@ -225,9 +225,9 @@ class Game {
         // Update camera position based on rotation
         this.updateCamera = () => {
             this.camera.position.x = Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
-            this.camera.position.y = Math.sin(cameraRotation.x) * cameraDistance + 10;
+            this.camera.position.y = Math.sin(cameraRotation.x) * cameraDistance + 15; // Higher base height
             this.camera.position.z = Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
-            this.camera.lookAt(0, 0, 0);
+            this.camera.lookAt(0, -2, 0); // Look at platform level
         };
     }
     
@@ -384,19 +384,26 @@ class Character {
         this.mesh.castShadow = true;
         this.game.scene.add(this.mesh);
         
-        // Spawn position based on team
-        const spawnX = this.team === 'blue' ? -10 : 10;
-        const spawnZ = (Math.random() - 0.5) * 10;
+        // Spawn position based on team - ON the platform, further from edges
+        const spawnX = this.team === 'blue' ? -8 : 8;
+        const spawnZ = (Math.random() - 0.5) * 6; // Narrower Z range
+        const spawnY = -2; // Just above platform surface (platform top is at -4, character radius 1.2)
         
-        // Physics body
+        // Physics body - use capsule-like shape (cylinder with rounded ends)
         const bodyShape = new CANNON.Sphere(1.2);
         this.body = new CANNON.Body({
             mass: 5,
             shape: bodyShape,
-            position: new CANNON.Vec3(spawnX, 5, spawnZ),
-            linearDamping: 0.3,
-            angularDamping: 0.5
+            position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
+            linearDamping: 0.4, // Increased damping for more control
+            angularDamping: 0.7 // Increased to reduce spinning
         });
+        
+        // Add friction for better ground contact
+        this.body.material = new CANNON.Material();
+        this.body.material.friction = 0.8;
+        this.body.material.restitution = 0.1; // Less bouncy
+        
         this.game.world.addBody(this.body);
         
         // Add head
@@ -511,13 +518,13 @@ class Character {
                     nearestDistance = distance;
                     nearestEnemy = char;
                 }
-        }
+            }
         }
         
         if (nearestEnemy) {
             this.aiTarget = nearestEnemy;
             
-            if (nearestDistance < 3) {
+            if (nearestDistance < 4) {
                 // Close enough to attack
                 this.changeAIState('attacking');
             } else {
@@ -530,7 +537,7 @@ class Character {
         for (const char of this.game.characters) {
             if (char.team !== this.team && char.isAlive && char.isKnockedOut && !char.isGrabbed) {
                 const distance = this.body.position.distanceTo(char.body.position);
-                if (distance < 3) {
+                if (distance < 4) {
                     this.grabCharacter(char);
                     break;
                 }
@@ -546,41 +553,70 @@ class Character {
         
         const distance = this.body.position.distanceTo(this.aiTarget.body.position);
         
-        if (distance > 5) {
+        if (distance > 6) {
             // Target too far, go back to seeking
             this.changeAIState('seeking');
             return;
         }
         
-        if (distance < 2.5 && this.actionCooldown === 0) {
-            // Perform attack
+        if (distance < 3.5 && this.actionCooldown === 0) {
+            // Perform attack - more varied attack pattern
             const attackType = Math.random();
             
-            if (attackType < 0.6) {
+            if (attackType < 0.5) {
                 this.punch(this.aiTarget);
             } else {
                 this.dropkick(this.aiTarget);
             }
             
-            this.actionCooldown = 60 + Math.random() * 60;
-        } else {
-            // Move closer
+            this.actionCooldown = 45 + Math.random() * 45; // Faster cooldown
+        } else if (distance > 2.5) {
+            // Move closer to optimal attack range
             this.moveTowards(this.aiTarget.body.position);
+        } else {
+            // In optimal range, circle and prepare to attack
+            // Add slight random movement to make it more dynamic
+            if (this.aiTimer % 20 === 0) {
+                const circleDirection = new CANNON.Vec3(
+                    (Math.random() - 0.5) * 40,
+                    0,
+                    (Math.random() - 0.5) * 40
+                );
+                this.body.applyForce(circleDirection, this.body.position);
+            }
         }
     }
     
     moveTowards(targetPos) {
+        // Check distance from platform center to avoid running off edge
+        const distFromCenter = Math.sqrt(
+            Math.pow(this.body.position.x, 2) + Math.pow(this.body.position.z, 2)
+        );
+        
+        // If too close to edge, move back toward center
+        if (distFromCenter > 12) {
+            const toCenterDirection = new CANNON.Vec3(
+                -this.body.position.x,
+                0,
+                -this.body.position.z
+            );
+            toCenterDirection.normalize();
+            const force = toCenterDirection.scale(100 * this.speed);
+            this.body.applyForce(force, this.body.position);
+            return;
+        }
+        
         const direction = new CANNON.Vec3();
         direction.copy(targetPos);
         direction.vsub(this.body.position);
         direction.y = 0; // Don't move vertically
         direction.normalize();
         
-        const force = direction.scale(80 * this.speed);
+        const force = direction.scale(100 * this.speed); // Increased force for more responsiveness
         this.body.applyForce(force, this.body.position);
         
         // Limit speed
-        const maxSpeed = 8 * this.speed;
+        const maxSpeed = 10 * this.speed; // Increased max speed
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
@@ -589,59 +625,99 @@ class Character {
             this.body.velocity.x *= scale;
             this.body.velocity.z *= scale;
         }
+        
+        // Add upward stabilization if character is tilted
+        if (this.body.position.y < -3.5) {
+            this.body.velocity.y = Math.max(this.body.velocity.y, 0);
+        }
     }
     
     punch(target) {
-        // Apply force to target
+        // Apply force to target with better direction calculation
         const direction = new CANNON.Vec3();
         direction.copy(target.body.position);
         direction.vsub(this.body.position);
+        direction.y = 0.2; // Slight upward angle for more dramatic effect
         direction.normalize();
         
-        const force = direction.scale(200 * this.strength);
+        const force = direction.scale(250 * this.strength); // Increased force
         target.body.applyImpulse(force, target.body.position);
         
         // Damage target
         target.takeDamage(20 * this.strength);
         
-        // Visual feedback - swing arm
+        // Visual feedback - swing arm with animation
         if (this.rightArm) {
-            this.rightArm.rotation.z = -Math.PI / 2;
+            // Windup
+            this.rightArm.rotation.z = -Math.PI / 6;
             setTimeout(() => {
-                if (this.rightArm) this.rightArm.rotation.z = -Math.PI / 4;
-            }, 200);
+                if (this.rightArm) {
+                    // Punch extension
+                    this.rightArm.rotation.z = -Math.PI / 2;
+                    this.rightArm.position.x = 1.3;
+                    setTimeout(() => {
+                        if (this.rightArm) {
+                            // Return to normal
+                            this.rightArm.rotation.z = -Math.PI / 4;
+                            this.rightArm.position.x = 1;
+                        }
+                    }, 150);
+                }
+            }, 100);
         }
+        
+        // Add slight recoil to puncher
+        const recoil = direction.scale(-20);
+        this.body.applyImpulse(recoil, this.body.position);
     }
     
     dropkick(target) {
-        // Jump and apply force
-        this.body.velocity.y = 8;
+        // Jump and apply force with windup
+        this.body.velocity.y = 10; // Stronger jump
         
         const direction = new CANNON.Vec3();
         direction.copy(target.body.position);
         direction.vsub(this.body.position);
+        direction.y = 0;
         direction.normalize();
         
-        // Apply force to self
-        const selfForce = direction.scale(150);
+        // Apply force to self for forward momentum
+        const selfForce = direction.scale(200);
         this.body.applyImpulse(selfForce, this.body.position);
         
         // Apply force to target if close
         const distance = this.body.position.distanceTo(target.body.position);
-        if (distance < 3) {
-            const targetForce = direction.scale(300 * this.strength);
+        if (distance < 4) {
+            const targetForce = direction.scale(400 * this.strength); // Stronger knockback
+            targetForce.y = 100; // Add upward component
             target.body.applyImpulse(targetForce, target.body.position);
             target.takeDamage(35 * this.strength);
+            
+            // Add spin to target for dramatic effect
+            target.body.angularVelocity.set(
+                (Math.random() - 0.5) * 10,
+                (Math.random() - 0.5) * 5,
+                (Math.random() - 0.5) * 10
+            );
         }
         
-        // Visual feedback - extend legs
+        // Visual feedback - extend legs with better animation
         if (this.leftLeg && this.rightLeg) {
-            this.leftLeg.rotation.x = Math.PI / 4;
-            this.rightLeg.rotation.x = Math.PI / 4;
+            this.leftLeg.rotation.x = Math.PI / 3;
+            this.rightLeg.rotation.x = Math.PI / 3;
+            this.leftLeg.position.y = -1.3;
+            this.rightLeg.position.y = -1.3;
+            
             setTimeout(() => {
-                if (this.leftLeg) this.leftLeg.rotation.x = 0;
-                if (this.rightLeg) this.rightLeg.rotation.x = 0;
-            }, 300);
+                if (this.leftLeg) {
+                    this.leftLeg.rotation.x = 0;
+                    this.leftLeg.position.y = -1.5;
+                }
+                if (this.rightLeg) {
+                    this.rightLeg.rotation.x = 0;
+                    this.rightLeg.position.y = -1.5;
+                }
+            }, 400);
         }
     }
     
@@ -791,20 +867,45 @@ class Character {
         );
         
         if (speed > 0.5 && !this.isKnockedOut) {
-            const time = Date.now() * 0.005;
+            const time = Date.now() * 0.008; // Faster animation
             
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = Math.sin(time) * 0.3;
+                this.leftLeg.rotation.x = Math.sin(time) * 0.5;
+                this.leftLeg.rotation.z = Math.sin(time * 0.5) * 0.1;
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = Math.sin(time + Math.PI) * 0.3;
+                this.rightLeg.rotation.x = Math.sin(time + Math.PI) * 0.5;
+                this.rightLeg.rotation.z = Math.sin(time * 0.5 + Math.PI) * 0.1;
             }
             if (this.leftArm) {
-                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 0.2;
+                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 0.3;
+                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time * 0.3) * 0.1;
             }
             if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.x = Math.sin(time) * 0.2;
+                this.rightArm.rotation.x = Math.sin(time) * 0.3;
+                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time * 0.3) * 0.1;
             }
+        } else if (!this.isKnockedOut) {
+            // Idle animation - slight bobbing
+            const time = Date.now() * 0.002;
+            
+            if (this.leftArm) {
+                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time) * 0.05;
+            }
+            if (this.rightArm && !this.isGrabbing) {
+                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.05;
+            }
+            if (this.head) {
+                this.head.rotation.y = Math.sin(time * 0.5) * 0.1;
+            }
+        }
+        
+        // Add physics-based wobble to knocked out characters
+        if (this.isKnockedOut) {
+            // Make limbs loose and floppy
+            const wobble = Math.sin(Date.now() * 0.01);
+            if (this.leftArm) this.leftArm.rotation.z = wobble * 0.5;
+            if (this.rightArm) this.rightArm.rotation.z = -wobble * 0.5;
         }
     }
     
