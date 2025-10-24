@@ -1,0 +1,13 @@
+{
+  "name": "tiktok-battle-arena",
+  "version": "1.0.0",
+  "description": "3D physics-based fighting game",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8080"
+  },
+  "dependencies": {
+    "three": "^0.128.0",
+    "cannon": "^0.6.2"
+  }
+}
