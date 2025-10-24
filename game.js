@@ -403,15 +403,18 @@ class Character {
             mass: 5,
             shape: bodyShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.2, // Lower damping for more responsive movement
-            angularDamping: 0.7, // Still reasonably high to reduce spinning
-            fixedRotation: false // Allow rotation but controlled
+            linearDamping: 0.4, // High damping for stability
+            angularDamping: 0.95, // Very high to strongly resist rotation
+            fixedRotation: false // Allow rotation but heavily controlled
         });
+        
+        // Ensure body starts perfectly upright
+        this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
         
         // Add friction for better ground contact
         this.body.material = new CANNON.Material();
-        this.body.material.friction = 0.9;
-        this.body.material.restitution = 0.2; // Slightly bouncy for comedic effect
+        this.body.material.friction = 1.0; // High friction for no slipping
+        this.body.material.restitution = 0.1; // Low bounce for stability
         
         this.game.world.addBody(this.body);
         
@@ -469,8 +472,9 @@ class Character {
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
         
-        // Keep character upright (Gang Beasts style stabilization)
-        if (!this.isKnockedOut && !this.isStunned) {
+        // ALWAYS keep character upright (Gang Beasts style stabilization)
+        // Even when knocked out or stunned, maintain upright orientation
+        if (!this.isKnockedOut) {
             this.stabilizeUpright();
         }
         
@@ -521,34 +525,68 @@ class Character {
     }
     
     stabilizeUpright() {
-        // Simplified stabilization - less aggressive to allow movement (Gang Beasts style)
-        // Just limit excessive rotation, don't force perfectly upright
-        const maxTilt = 0.3; // Allow some tilt for dynamic movement
+        // Very aggressive upright stabilization system (Gang Beasts/Party Animals style)
+        // This keeps characters standing while allowing dynamic movement
         
-        // Only correct if tilted too much
-        const tiltX = Math.abs(this.body.quaternion.x);
-        const tiltZ = Math.abs(this.body.quaternion.z);
-        
-        if (tiltX > maxTilt) {
-            this.body.angularVelocity.x *= 0.5; // Dampen tilting
-        }
-        if (tiltZ > maxTilt) {
-            this.body.angularVelocity.z *= 0.5;
-        }
-        
-        // Limit overall angular velocity
-        const maxAngularVel = 4;
-        const angVelLength = Math.sqrt(
-            this.body.angularVelocity.x ** 2 +
-            this.body.angularVelocity.y ** 2 +
-            this.body.angularVelocity.z ** 2
+        // Get current rotation as euler angles
+        const euler = new THREE.Euler();
+        const quat = new THREE.Quaternion(
+            this.body.quaternion.x,
+            this.body.quaternion.y,
+            this.body.quaternion.z,
+            this.body.quaternion.w
         );
+        euler.setFromQuaternion(quat, 'XYZ');
         
-        if (angVelLength > maxAngularVel) {
-            const scale = maxAngularVel / angVelLength;
-            this.body.angularVelocity.x *= scale;
-            this.body.angularVelocity.y *= scale;
-            this.body.angularVelocity.z *= scale;
+        // Calculate tilt from vertical (we want X and Z rotations near 0)
+        const tiltX = euler.x;
+        const tiltZ = euler.z;
+        
+        // Apply very strong corrective torque to bring character upright
+        const correctionStrength = 300; // Much stronger for rapid correction
+        
+        // Apply torque to counter the tilt
+        const correctionTorque = new CANNON.Vec3(
+            -tiltX * correctionStrength,
+            0, // Don't affect Y rotation (turning)
+            -tiltZ * correctionStrength
+        );
+        this.body.torque.vadd(correctionTorque, this.body.torque);
+        
+        // Strongly dampen angular velocity to prevent oscillation and falling
+        this.body.angularVelocity.x *= 0.5;
+        this.body.angularVelocity.z *= 0.5;
+        
+        // Limit Y rotation speed (spinning) but allow it
+        if (Math.abs(this.body.angularVelocity.y) > 2) {
+            this.body.angularVelocity.y *= 0.85;
+        }
+        
+        // Additional constraint: if tilted at all, apply correction
+        // Lower threshold for more responsive correction
+        const maxTilt = 0.2; // radians (~11 degrees)
+        if (Math.abs(tiltX) > maxTilt || Math.abs(tiltZ) > maxTilt) {
+            // Strong correction - immediately dampen rotation
+            this.body.angularVelocity.x *= 0.2;
+            this.body.angularVelocity.z *= 0.2;
+            
+            // Apply very strong corrective torque
+            const emergencyTorque = new CANNON.Vec3(
+                -tiltX * correctionStrength * 3,
+                0,
+                -tiltZ * correctionStrength * 3
+            );
+            this.body.torque.vadd(emergencyTorque, this.body.torque);
+        }
+        
+        // If severely tilted (fallen over), force upright orientation
+        const criticalTilt = 0.7; // ~40 degrees
+        if (Math.abs(tiltX) > criticalTilt || Math.abs(tiltZ) > criticalTilt) {
+            // Emergency reset - force upright quaternion
+            // Preserve Y rotation (turning) but reset X and Z
+            const yRotation = euler.y;
+            this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yRotation);
+            this.body.angularVelocity.set(0, this.body.angularVelocity.y * 0.5, 0);
         }
     }
     
@@ -739,14 +777,15 @@ class Character {
         direction.y = 0; // Don't move vertically
         direction.normalize();
         
-        const force = direction.scale(300 * this.speed); // Much stronger force to overcome damping
+        // Apply force at the center of mass for better balance
+        const force = direction.scale(250 * this.speed); // Balanced force strength
         this.body.applyForce(force, this.body.position);
         
         // Wake up the body if it's sleeping
         this.body.wakeUp();
         
         // Limit speed
-        const maxSpeed = 15 * this.speed; // Higher max speed for more dynamic movement
+        const maxSpeed = 12 * this.speed; // Controlled max speed for better balance
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
@@ -756,8 +795,14 @@ class Character {
             this.body.velocity.z *= scale;
         }
         
-        // Add upward stabilization if character is sinking
+        // Keep character grounded - prevent floating
+        if (this.body.position.y > -2.5) {
+            this.body.velocity.y = Math.min(this.body.velocity.y, 0);
+        }
+        
+        // Keep character from sinking through platform
         if (this.body.position.y < -3.5) {
+            this.body.position.y = -2;
             this.body.velocity.y = Math.max(this.body.velocity.y, 0);
         }
     }
