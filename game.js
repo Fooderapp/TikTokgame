@@ -389,15 +389,15 @@ class Character {
         const spawnZ = (Math.random() - 0.5) * 6; // Narrower Z range
         const spawnY = -2; // Just above platform surface (platform top is at -4, character radius 1.2)
         
-        // Physics body - use capsule-like shape for upright standing (Gang Beasts style)
+        // Physics body - use box shape for upright standing (Gang Beasts style)
         // Box shape prevents rolling and keeps characters standing upright
         const bodyShape = new CANNON.Box(new CANNON.Vec3(0.6, 1.2, 0.6));
         this.body = new CANNON.Body({
             mass: 5,
             shape: bodyShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.3, // Reduced damping for more responsive movement
-            angularDamping: 0.8, // Still high to reduce spinning
+            linearDamping: 0.2, // Lower damping for more responsive movement
+            angularDamping: 0.7, // Still reasonably high to reduce spinning
             fixedRotation: false // Allow rotation but controlled
         });
         
@@ -732,11 +732,14 @@ class Character {
         direction.y = 0; // Don't move vertically
         direction.normalize();
         
-        const force = direction.scale(150 * this.speed); // Increased force for better responsiveness
+        const force = direction.scale(300 * this.speed); // Much stronger force to overcome damping
         this.body.applyForce(force, this.body.position);
         
+        // Wake up the body if it's sleeping
+        this.body.wakeUp();
+        
         // Limit speed
-        const maxSpeed = 12 * this.speed; // Increased max speed for more action
+        const maxSpeed = 15 * this.speed; // Higher max speed for more dynamic movement
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
@@ -746,7 +749,7 @@ class Character {
             this.body.velocity.z *= scale;
         }
         
-        // Add upward stabilization if character is tilted
+        // Add upward stabilization if character is sinking
         if (this.body.position.y < -3.5) {
             this.body.velocity.y = Math.max(this.body.velocity.y, 0);
         }
