@@ -403,7 +403,7 @@ class Character {
             mass: 5,
             shape: bodyShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.2, // Reduced damping for better movement
+            linearDamping: 0.1, // Very low damping for maximum movement
             angularDamping: 0.95, // Very high to strongly resist rotation
             fixedRotation: false, // Allow rotation but heavily controlled
             sleepSpeedLimit: 0.01, // Very low threshold to prevent unwanted sleeping
@@ -738,11 +738,21 @@ class Character {
             // In optimal range, circle and prepare to attack (Party Animals behavior)
             // Add continuous movement to stay dynamic and unpredictable
             const circleDirection = new CANNON.Vec3(
-                (Math.random() - 0.5) * 80,
+                (Math.random() - 0.5) * 100,
                 0,
-                (Math.random() - 0.5) * 80
+                (Math.random() - 0.5) * 100
             );
             this.body.applyForce(circleDirection, this.body.position);
+            
+            // Also add small impulses to ensure movement
+            if (this.aiTimer % 10 === 0) {
+                const impulse = new CANNON.Vec3(
+                    (Math.random() - 0.5) * 5,
+                    0,
+                    (Math.random() - 0.5) * 5
+                );
+                this.body.applyImpulse(impulse, this.body.position);
+            }
             
             // Occasional feint - wind up but don't attack
             if (this.aiTimer % 80 === 0 && Math.random() < 0.3) {
@@ -794,14 +804,14 @@ class Character {
         }
         
         // Apply force at the center of mass for better balance
-        const force = direction.scale(400 * this.speed); // Increased force for more visible movement
+        const force = direction.scale(600 * this.speed); // Much stronger force for visible movement
         this.body.applyForce(force, this.body.position);
         
         // Wake up the body if it's sleeping
         this.body.wakeUp();
         
         // Limit speed
-        const maxSpeed = 15 * this.speed; // Increased max speed for more action
+        const maxSpeed = 20 * this.speed; // Much higher max speed for dynamic action
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
