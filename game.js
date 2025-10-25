@@ -737,15 +737,17 @@ class Character {
         } else if (!this.isStunned) {
             // In optimal range, circle and prepare to attack (Party Animals behavior)
             // Add continuous movement to stay dynamic and unpredictable
+            const CIRCLE_FORCE_MAGNITUDE = 100; // Force magnitude for circling behavior
             const circleDirection = new CANNON.Vec3(
-                (Math.random() - 0.5) * 100,
+                (Math.random() - 0.5) * CIRCLE_FORCE_MAGNITUDE,
                 0,
-                (Math.random() - 0.5) * 100
+                (Math.random() - 0.5) * CIRCLE_FORCE_MAGNITUDE
             );
             this.body.applyForce(circleDirection, this.body.position);
             
-            // Also add small impulses to ensure movement
-            if (this.aiTimer % 10 === 0) {
+            // Add small impulses periodically to maintain movement when velocity is low
+            const currentSpeed = Math.sqrt(this.body.velocity.x**2 + this.body.velocity.z**2);
+            if (this.aiTimer % 20 === 0 && currentSpeed < 2) {
                 const impulse = new CANNON.Vec3(
                     (Math.random() - 0.5) * 5,
                     0,
