@@ -384,9 +384,12 @@ class Character {
         // Ragdoll-like character using connected shapes
         const color = this.team === 'blue' ? 0x4A90E2 : 0xE24A4A;
         
-        // Main body (torso) - using box geometry
-        const bodyGeometry = new THREE.BoxGeometry(1.5, 2, 1);
-        const bodyMaterial = new THREE.MeshPhongMaterial({ color: color });
+        // Main body (torso) - using box geometry with rounder/funnier proportions
+        const bodyGeometry = new THREE.BoxGeometry(1.8, 2.2, 1.2); // Wider, slightly taller
+        const bodyMaterial = new THREE.MeshPhongMaterial({ 
+            color: color,
+            shininess: 50
+        });
         this.mesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
         this.mesh.castShadow = true;
         this.game.scene.add(this.mesh);
@@ -424,38 +427,84 @@ class Character {
         this.lastHitTime = 0;
         this.isStunned = false;
         
-        // Add head
-        const headGeometry = new THREE.SphereGeometry(0.6, 16, 16);
-        const headMaterial = new THREE.MeshPhongMaterial({ color: 0xFFDBAC });
+        // Add head - MUCH BIGGER for comedic effect (like Party Animals)
+        const headGeometry = new THREE.SphereGeometry(0.9, 16, 16); // Much bigger head
+        const headMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xFFDBAC,
+            shininess: 30
+        });
         this.head = new THREE.Mesh(headGeometry, headMaterial);
-        this.head.position.y = 1.5;
+        this.head.position.y = 2.0; // Higher to accommodate bigger head
         this.mesh.add(this.head);
         
-        // Add arms using cylinders
-        const armGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 8);
+        // Add funny eyes for personality
+        const eyeGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+        const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+        
+        this.leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        this.leftEye.position.set(-0.25, 0.15, 0.8);
+        this.head.add(this.leftEye);
+        
+        this.rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        this.rightEye.position.set(0.25, 0.15, 0.8);
+        this.head.add(this.rightEye);
+        
+        // Add mouth for expression
+        const mouthGeometry = new THREE.BoxGeometry(0.3, 0.1, 0.1);
+        const mouthMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+        this.mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+        this.mouth.position.set(0, -0.2, 0.85);
+        this.head.add(this.mouth);
+        
+        // Add arms using cylinders - longer and thinner for comedic effect
+        const armGeometry = new THREE.CylinderGeometry(0.25, 0.25, 1.5, 8);
         const armMaterial = new THREE.MeshPhongMaterial({ color: color });
         
         this.leftArm = new THREE.Mesh(armGeometry, armMaterial);
-        this.leftArm.position.set(-1, 0.5, 0);
+        this.leftArm.position.set(-1.1, 0.5, 0);
         this.leftArm.rotation.z = Math.PI / 4;
         this.mesh.add(this.leftArm);
         
+        // Add hands for more personality
+        const handGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+        const handMaterial = new THREE.MeshPhongMaterial({ color: 0xFFDBAC });
+        
+        this.leftHand = new THREE.Mesh(handGeometry, handMaterial);
+        this.leftHand.position.y = -0.8;
+        this.leftArm.add(this.leftHand);
+        
         this.rightArm = new THREE.Mesh(armGeometry, armMaterial);
-        this.rightArm.position.set(1, 0.5, 0);
+        this.rightArm.position.set(1.1, 0.5, 0);
         this.rightArm.rotation.z = -Math.PI / 4;
         this.mesh.add(this.rightArm);
         
-        // Add legs using cylinders
-        const legGeometry = new THREE.CylinderGeometry(0.35, 0.35, 1.5, 8);
+        this.rightHand = new THREE.Mesh(handGeometry, handMaterial);
+        this.rightHand.position.y = -0.8;
+        this.rightArm.add(this.rightHand);
+        
+        // Add legs using cylinders - thicker and shorter for stubby comedic look
+        const legGeometry = new THREE.CylinderGeometry(0.4, 0.35, 1.3, 8);
         const legMaterial = new THREE.MeshPhongMaterial({ color: color });
         
         this.leftLeg = new THREE.Mesh(legGeometry, legMaterial);
         this.leftLeg.position.set(-0.5, -1.5, 0);
         this.mesh.add(this.leftLeg);
         
+        // Add feet for more personality
+        const footGeometry = new THREE.BoxGeometry(0.5, 0.3, 0.8);
+        const footMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+        
+        this.leftFoot = new THREE.Mesh(footGeometry, footMaterial);
+        this.leftFoot.position.set(0, -0.7, 0.15);
+        this.leftLeg.add(this.leftFoot);
+        
         this.rightLeg = new THREE.Mesh(legGeometry, legMaterial);
         this.rightLeg.position.set(0.5, -1.5, 0);
         this.mesh.add(this.rightLeg);
+        
+        this.rightFoot = new THREE.Mesh(footGeometry, footMaterial);
+        this.rightFoot.position.set(0, -0.7, 0.15);
+        this.rightLeg.add(this.rightFoot);
     }
     
     setupAI() {
@@ -530,8 +579,13 @@ class Character {
     }
     
     stabilizeUpright() {
-        // Very aggressive upright stabilization system (Gang Beasts/Party Animals style)
-        // This keeps characters standing while allowing dynamic movement
+        // Less aggressive upright stabilization to allow more physics fun
+        // Only stabilize when not being hit or in combat
+        
+        // Skip stabilization when stunned (just got hit) - let physics play out!
+        if (this.isStunned) {
+            return;
+        }
         
         // Get current rotation as euler angles
         const euler = new THREE.Euler();
@@ -547,8 +601,8 @@ class Character {
         const tiltX = euler.x;
         const tiltZ = euler.z;
         
-        // Apply very strong corrective torque to bring character upright
-        const correctionStrength = 300; // Much stronger for rapid correction
+        // Much weaker corrective torque to allow wobbling and physics fun
+        const correctionStrength = 150; // Half as strong for more movement
         
         // Apply torque to counter the tilt
         const correctionTorque = new CANNON.Vec3(
@@ -558,37 +612,34 @@ class Character {
         );
         this.body.torque.vadd(correctionTorque, this.body.torque);
         
-        // Strongly dampen angular velocity to prevent oscillation and falling
-        this.body.angularVelocity.x *= 0.5;
-        this.body.angularVelocity.z *= 0.5;
+        // Less dampening to allow more wobble
+        this.body.angularVelocity.x *= 0.7;
+        this.body.angularVelocity.z *= 0.7;
         
-        // Limit Y rotation speed (spinning) but allow it
-        if (Math.abs(this.body.angularVelocity.y) > 2) {
-            this.body.angularVelocity.y *= 0.85;
+        // Allow more spinning
+        if (Math.abs(this.body.angularVelocity.y) > 3) {
+            this.body.angularVelocity.y *= 0.9;
         }
         
-        // Additional constraint: if tilted at all, apply correction
-        // Lower threshold for more responsive correction
-        const maxTilt = 0.2; // radians (~11 degrees)
+        // Only apply strong correction if VERY tilted
+        const maxTilt = 0.5; // Much higher threshold - allow more tilt
         if (Math.abs(tiltX) > maxTilt || Math.abs(tiltZ) > maxTilt) {
-            // Strong correction - immediately dampen rotation
-            this.body.angularVelocity.x *= 0.2;
-            this.body.angularVelocity.z *= 0.2;
+            // Gentler correction
+            this.body.angularVelocity.x *= 0.5;
+            this.body.angularVelocity.z *= 0.5;
             
-            // Apply very strong corrective torque
             const emergencyTorque = new CANNON.Vec3(
-                -tiltX * correctionStrength * 3,
+                -tiltX * correctionStrength * 2,
                 0,
-                -tiltZ * correctionStrength * 3
+                -tiltZ * correctionStrength * 2
             );
             this.body.torque.vadd(emergencyTorque, this.body.torque);
         }
         
-        // If severely tilted (fallen over), force upright orientation
-        const criticalTilt = 0.7; // ~40 degrees
+        // Only force upright if completely fallen over
+        const criticalTilt = 1.2; // Much higher threshold
         if (Math.abs(tiltX) > criticalTilt || Math.abs(tiltZ) > criticalTilt) {
             // Emergency reset - force upright quaternion
-            // Preserve Y rotation (turning) but reset X and Z
             const yRotation = euler.y;
             this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yRotation);
             this.body.angularVelocity.set(0, this.body.angularVelocity.y * 0.5, 0);
@@ -598,25 +649,45 @@ class Character {
     animateStruggle() {
         // Flailing animation when grabbed - MUCH MORE DRAMATIC (Party Animals style)
         const time = Date.now() * 0.03; // Faster for more visibility
-        const intensity = 1.2; // Much stronger struggle
+        const intensity = 1.5; // Much stronger struggle
         
         if (this.leftArm) {
-            this.leftArm.rotation.x = Math.sin(time * 1.5) * intensity * 1.2; // Huge arm flailing
-            this.leftArm.rotation.z = Math.PI / 4 + Math.cos(time * 1.2) * intensity;
+            this.leftArm.rotation.x = Math.sin(time * 1.5) * intensity * 1.5; // Huge arm flailing
+            this.leftArm.rotation.z = Math.PI / 4 + Math.cos(time * 1.2) * intensity * 1.2;
+            if (this.leftHand) {
+                this.leftHand.rotation.x = Math.sin(time * 3) * 1.5;
+                this.leftHand.scale.set(1.2, 1.2, 1.2); // Bigger for visibility
+            }
         }
         if (this.rightArm) {
-            this.rightArm.rotation.x = Math.sin(time * 1.3 + Math.PI) * intensity * 1.2;
-            this.rightArm.rotation.z = -Math.PI / 4 + Math.cos(time * 1.4) * intensity;
+            this.rightArm.rotation.x = Math.sin(time * 1.3 + Math.PI) * intensity * 1.5;
+            this.rightArm.rotation.z = -Math.PI / 4 + Math.cos(time * 1.4) * intensity * 1.2;
+            if (this.rightHand) {
+                this.rightHand.rotation.x = Math.sin(time * 3 + Math.PI) * 1.5;
+                this.rightHand.scale.set(1.2, 1.2, 1.2);
+            }
         }
         if (this.leftLeg) {
-            this.leftLeg.rotation.x = Math.sin(time * 1.1) * 0.8; // Kicking motion
+            this.leftLeg.rotation.x = Math.sin(time * 1.1) * 1.0; // Kicking motion
+            if (this.leftFoot) this.leftFoot.rotation.x = Math.sin(time * 2) * 0.8;
         }
         if (this.rightLeg) {
-            this.rightLeg.rotation.x = Math.sin(time * 1.1 + Math.PI) * 0.8;
+            this.rightLeg.rotation.x = Math.sin(time * 1.1 + Math.PI) * 1.0;
+            if (this.rightFoot) this.rightFoot.rotation.x = Math.sin(time * 2 + Math.PI) * 0.8;
         }
         if (this.head) {
-            this.head.rotation.y = Math.sin(time * 0.8) * 0.5; // More dramatic head shake
-            this.head.rotation.x = Math.sin(time * 0.9) * 0.3; // More movement
+            this.head.rotation.y = Math.sin(time * 0.8) * 0.7; // More dramatic head shake
+            this.head.rotation.x = Math.sin(time * 0.9) * 0.4;
+            this.head.rotation.z = Math.sin(time * 1.1) * 0.3;
+        }
+        // Eyes wide in panic
+        if (this.leftEye && this.rightEye) {
+            this.leftEye.scale.set(1.5, 1.5, 1.5);
+            this.rightEye.scale.set(1.5, 1.5, 1.5);
+        }
+        // Mouth open in distress
+        if (this.mouth) {
+            this.mouth.scale.set(1.3, 2, 1);
         }
     }
     
@@ -624,26 +695,36 @@ class Character {
         // Stumbling animation after being hit - MUCH MORE VISIBLE (comedic effect)
         const time = Date.now() - this.lastHitTime;
         const t = time / 800; // 0 to 1 over stun duration
-        const wobble = Math.sin(time * 0.05) * (1 - t) * 1.0; // Much stronger wobble
+        const wobble = Math.sin(time * 0.05) * (1 - t) * 1.5; // Much stronger wobble
         
         if (this.leftArm) {
-            this.leftArm.rotation.z = Math.PI / 4 + wobble * 1.2; // Big arm wobble
-            this.leftArm.rotation.x = wobble * 0.8;
+            this.leftArm.rotation.z = Math.PI / 4 + wobble * 1.5; // Big arm wobble
+            this.leftArm.rotation.x = wobble * 1.2;
+            if (this.leftHand) this.leftHand.rotation.x = wobble * 1.0;
         }
         if (this.rightArm) {
-            this.rightArm.rotation.z = -Math.PI / 4 - wobble * 1.2;
-            this.rightArm.rotation.x = -wobble * 0.8;
+            this.rightArm.rotation.z = -Math.PI / 4 - wobble * 1.5;
+            this.rightArm.rotation.x = -wobble * 1.2;
+            if (this.rightHand) this.rightHand.rotation.x = -wobble * 1.0;
         }
         if (this.head) {
-            this.head.rotation.x = wobble * 0.6; // More head movement
-            this.head.rotation.z = wobble * 0.7;
+            this.head.rotation.x = wobble * 0.8; // More head movement
+            this.head.rotation.z = wobble * 0.9;
+            this.head.rotation.y = wobble * 0.6;
+        }
+        // Dazed eyes
+        if (this.leftEye && this.rightEye) {
+            this.leftEye.rotation.z = wobble * 0.5;
+            this.rightEye.rotation.z = -wobble * 0.5;
         }
         // Add leg stagger
         if (this.leftLeg) {
-            this.leftLeg.rotation.x = wobble * 0.4;
+            this.leftLeg.rotation.x = wobble * 0.6;
+            if (this.leftFoot) this.leftFoot.rotation.x = wobble * 0.4;
         }
         if (this.rightLeg) {
-            this.rightLeg.rotation.x = -wobble * 0.4;
+            this.rightLeg.rotation.x = -wobble * 0.6;
+            if (this.rightFoot) this.rightFoot.rotation.x = -wobble * 0.4;
         }
     }
     
@@ -836,24 +917,33 @@ class Character {
     }
     
     punch(target) {
-        // Wind-up telegraph (Gang Beasts style)
+        // VERY DRAMATIC wind-up telegraph (Gang Beasts style)
         if (this.rightArm) {
             this.rightArm.rotation.z = -Math.PI / 6;
-            this.rightArm.rotation.x = -0.3;
+            this.rightArm.rotation.x = -0.8; // More exaggerated wind-up
+            this.rightHand.scale.set(1.5, 1.5, 1.5); // Hand grows for comedic effect
         }
         
-        // Short delay for wind-up visibility
+        // Lean back for more dramatic wind-up
+        const leanBack = new CANNON.Vec3(
+            (this.body.position.x - target.body.position.x) * 50,
+            0,
+            (this.body.position.z - target.body.position.z) * 50
+        );
+        this.body.applyForce(leanBack, this.body.position);
+        
+        // Longer delay for more visible wind-up
         setTimeout(() => {
             if (!this.isAlive) return;
             
-            // Apply force to target with better direction calculation
+            // Apply MUCH STRONGER force to target
             const direction = new CANNON.Vec3();
             direction.copy(target.body.position);
             direction.vsub(this.body.position);
-            direction.y = 0.3; // Upward angle for dramatic effect
+            direction.y = 0.5; // Upward angle for dramatic launch
             direction.normalize();
             
-            const force = direction.scale(300 * this.strength); // Stronger impact
+            const force = direction.scale(500 * this.strength); // Much stronger impact
             target.body.applyImpulse(force, target.body.position);
             
             // Apply impact reaction to target
@@ -862,26 +952,27 @@ class Character {
             // Damage target
             target.takeDamage(20 * this.strength);
             
-            // Punch extension animation
+            // HUGE punch extension animation
             if (this.rightArm) {
                 this.rightArm.rotation.z = -Math.PI / 2;
-                this.rightArm.position.x = 1.4;
+                this.rightArm.position.x = 1.8; // Extended further
                 this.rightArm.rotation.x = 0;
+                this.rightHand.scale.set(1, 1, 1);
                 
                 setTimeout(() => {
                     if (this.rightArm) {
                         // Return to normal
                         this.rightArm.rotation.z = -Math.PI / 4;
-                        this.rightArm.position.x = 1;
+                        this.rightArm.position.x = 1.1;
                         this.rightArm.rotation.x = 0;
                     }
-                }, 150);
+                }, 200);
             }
             
-            // Add slight recoil to puncher
-            const recoil = direction.scale(-15);
+            // Bigger recoil to puncher for comedy
+            const recoil = direction.scale(-30);
             this.body.applyImpulse(recoil, this.body.position);
-        }, 150);
+        }, 250); // Longer wind-up for visibility
     }
     
     headbutt(target) {
@@ -976,44 +1067,73 @@ class Character {
     }
     
     reactToHit(hitDirection) {
-        // Add impact reaction animation (Party Animals/Gang Beasts style)
+        // MUCH MORE DRAMATIC impact reaction (Party Animals/Gang Beasts style)
         this.lastHitTime = Date.now();
         this.isStunned = true;
         
-        // Flail arms on impact (comedic effect)
+        // HUGE flail arms on impact (very comedic effect)
         if (this.leftArm && this.rightArm) {
-            this.leftArm.rotation.x = 1.5;
-            this.rightArm.rotation.x = 1.5;
+            this.leftArm.rotation.x = 2.0; // Much bigger flail
+            this.rightArm.rotation.x = 2.0;
+            this.leftArm.rotation.z = Math.PI / 2;
+            this.rightArm.rotation.z = -Math.PI / 2;
             
             setTimeout(() => {
                 if (this.leftArm) this.leftArm.rotation.x = 0;
                 if (this.rightArm) this.rightArm.rotation.x = 0;
-            }, 300);
+            }, 400);
         }
         
-        // Add spinning effect if hit hard
+        // Exaggerated facial expression when hit
+        if (this.leftEye && this.rightEye) {
+            this.leftEye.scale.set(1.5, 0.5, 1); // Squished eyes
+            this.rightEye.scale.set(1.5, 0.5, 1);
+            setTimeout(() => {
+                if (this.leftEye) this.leftEye.scale.set(1, 1, 1);
+                if (this.rightEye) this.rightEye.scale.set(1, 1, 1);
+            }, 400);
+        }
+        
+        // Mouth opens in shock
+        if (this.mouth) {
+            this.mouth.scale.set(1.5, 2, 1);
+            setTimeout(() => {
+                if (this.mouth) this.mouth.scale.set(1, 1, 1);
+            }, 400);
+        }
+        
+        // Add MUCH MORE spinning effect if hit hard
         const spinForce = new CANNON.Vec3(
-            (Math.random() - 0.5) * 3,
-            (Math.random() - 0.5) * 2,
-            (Math.random() - 0.5) * 3
+            (Math.random() - 0.5) * 8,
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 8
         );
         this.body.angularVelocity.vadd(spinForce, this.body.angularVelocity);
     }
     
     dropkick(target) {
-        // Crouch/wind-up animation first (Gang Beasts style telegraph)
+        // VERY EXAGGERATED Crouch/wind-up animation first (Gang Beasts style telegraph)
         if (this.leftLeg && this.rightLeg) {
-            this.leftLeg.rotation.x = -0.5;
-            this.rightLeg.rotation.x = -0.5;
-            this.leftLeg.position.y = -1.3;
-            this.rightLeg.position.y = -1.3;
+            this.leftLeg.rotation.x = -0.8; // Deep crouch
+            this.rightLeg.rotation.x = -0.8;
+            this.leftLeg.position.y = -1.0;
+            this.rightLeg.position.y = -1.0;
+        }
+        
+        // Squat down the whole body
+        this.body.position.y -= 0.5;
+        
+        // Arms wind up
+        if (this.leftArm && this.rightArm) {
+            this.leftArm.rotation.x = -1.5;
+            this.rightArm.rotation.x = -1.5;
         }
         
         setTimeout(() => {
             if (!this.isAlive) return;
             
-            // Jump and apply force with dramatic launch
-            this.body.velocity.y = 12; // Higher jump for more air time
+            // HUGE jump and dramatic launch
+            this.body.velocity.y = 18; // Much higher jump for more air time
             
             const direction = new CANNON.Vec3();
             direction.copy(target.body.position);
@@ -1021,41 +1141,50 @@ class Character {
             direction.y = 0;
             direction.normalize();
             
-            // Apply force to self for forward momentum
-            const selfForce = direction.scale(250);
+            // Apply MUCH STRONGER force to self for dramatic forward momentum
+            const selfForce = direction.scale(400);
             this.body.applyImpulse(selfForce, this.body.position);
             
-            // Extend legs for kick animation
+            // FULL LEG EXTENSION for kick animation (very visible)
             if (this.leftLeg && this.rightLeg) {
-                this.leftLeg.rotation.x = Math.PI / 3;
-                this.rightLeg.rotation.x = Math.PI / 3;
-                this.leftLeg.position.y = -1.2;
-                this.rightLeg.position.y = -1.2;
+                this.leftLeg.rotation.x = Math.PI / 2; // Full extension
+                this.rightLeg.rotation.x = Math.PI / 2;
+                this.leftLeg.position.y = -0.8;
+                this.rightLeg.position.y = -0.8;
+                
+                // Feet point forward
+                if (this.leftFoot) this.leftFoot.rotation.x = -Math.PI / 3;
+                if (this.rightFoot) this.rightFoot.rotation.x = -Math.PI / 3;
             }
             
-            // Arms back for balance (comedic flying pose)
+            // Arms windmill for balance (super comedic flying pose)
             if (this.leftArm && this.rightArm) {
-                this.leftArm.rotation.x = -1;
-                this.rightArm.rotation.x = -1;
+                this.leftArm.rotation.x = -1.5;
+                this.rightArm.rotation.x = -1.5;
+                this.leftArm.rotation.z = Math.PI / 6;
+                this.rightArm.rotation.z = -Math.PI / 6;
             }
+            
+            // Spinning during flight for comedy
+            this.body.angularVelocity.y = 3;
             
             // Apply force to target if close enough (mid-air collision)
             setTimeout(() => {
                 if (!this.isAlive) return;
                 
                 const distance = this.body.position.distanceTo(target.body.position);
-                if (distance < 4.5) {
-                    const targetForce = direction.scale(450 * this.strength); // More powerful kick
-                    targetForce.y = 150; // High launch
+                if (distance < 5.0) {
+                    const targetForce = direction.scale(700 * this.strength); // MUCH MORE powerful kick
+                    targetForce.y = 250; // HUGE vertical launch
                     target.body.applyImpulse(targetForce, target.body.position);
                     target.takeDamage(35 * this.strength);
                     target.reactToHit(direction);
                     
-                    // Add dramatic spin to target
+                    // Add MASSIVE spin to target for comedy
                     target.body.angularVelocity.set(
-                        (Math.random() - 0.5) * 12,
-                        (Math.random() - 0.5) * 6,
-                        (Math.random() - 0.5) * 12
+                        (Math.random() - 0.5) * 20,
+                        (Math.random() - 0.5) * 10,
+                        (Math.random() - 0.5) * 20
                     );
                 }
                 
@@ -1064,16 +1193,24 @@ class Character {
                     if (this.leftLeg) {
                         this.leftLeg.rotation.x = 0;
                         this.leftLeg.position.y = -1.5;
+                        if (this.leftFoot) this.leftFoot.rotation.x = 0;
                     }
                     if (this.rightLeg) {
                         this.rightLeg.rotation.x = 0;
                         this.rightLeg.position.y = -1.5;
+                        if (this.rightFoot) this.rightFoot.rotation.x = 0;
                     }
-                    if (this.leftArm) this.leftArm.rotation.x = 0;
-                    if (this.rightArm) this.rightArm.rotation.x = 0;
-                }, 300);
-            }, 200);
-        }, 200);
+                    if (this.leftArm) {
+                        this.leftArm.rotation.x = 0;
+                        this.leftArm.rotation.z = Math.PI / 4;
+                    }
+                    if (this.rightArm) {
+                        this.rightArm.rotation.x = 0;
+                        this.rightArm.rotation.z = -Math.PI / 4;
+                    }
+                }, 400);
+            }, 300); // More time in air
+        }, 300); // Longer wind-up for visibility
     }
     
     takeDamage(amount) {
@@ -1266,116 +1403,182 @@ class Character {
     }
     
     animateLimbs() {
-        // GREATLY ENHANCED limb animations for VERY VISIBLE movement (Party Animals style)
+        // EXTREMELY ENHANCED limb animations for VERY VISIBLE movement (Party Animals style)
         const speed = Math.sqrt(
             this.body.velocity.x * this.body.velocity.x +
             this.body.velocity.z * this.body.velocity.z
         );
         
         if (speed > 0.3 && !this.isKnockedOut && !this.isStunned) {
-            // Running animation with MUCH MORE exaggerated movements
-            const time = Date.now() * 0.02; // Much faster animation for visibility
-            const intensity = Math.min(speed / 3, 2.5); // Higher intensity, scale with speed
+            // HILARIOUS running animation with EXTREME exaggerated movements
+            const time = Date.now() * 0.025; // Faster for more comedy
+            const intensity = Math.min(speed / 3, 3.0); // Much higher intensity
             
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = Math.sin(time) * 1.2 * intensity; // MUCH more swing
-                this.leftLeg.rotation.z = Math.sin(time * 0.5) * 0.25; // More lateral movement
-                // HIGH knee lift when running fast - VERY VISIBLE
-                if (Math.sin(time) > 0.3) {
-                    this.leftLeg.position.y = -1.0; // Much higher knee
+                // SUPER HIGH knee lifts (almost to chest)
+                const legSwing = Math.sin(time) * 1.8 * intensity;
+                this.leftLeg.rotation.x = legSwing;
+                this.leftLeg.rotation.z = Math.sin(time * 0.5) * 0.4; // More wobble
+                
+                // DRAMATIC knee lift position change
+                if (Math.sin(time) > 0.2) {
+                    this.leftLeg.position.y = -0.5; // Way up near torso
                 } else {
                     this.leftLeg.position.y = -1.5;
                 }
+                
+                // Foot flaps wildly
+                if (this.leftFoot) {
+                    this.leftFoot.rotation.x = Math.sin(time) * 0.8;
+                }
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = Math.sin(time + Math.PI) * 1.2 * intensity; // MUCH more swing
-                this.rightLeg.rotation.z = Math.sin(time * 0.5 + Math.PI) * 0.25;
-                if (Math.sin(time + Math.PI) > 0.3) {
-                    this.rightLeg.position.y = -1.0; // Much higher knee
+                const legSwing = Math.sin(time + Math.PI) * 1.8 * intensity;
+                this.rightLeg.rotation.x = legSwing;
+                this.rightLeg.rotation.z = Math.sin(time * 0.5 + Math.PI) * 0.4;
+                
+                if (Math.sin(time + Math.PI) > 0.2) {
+                    this.rightLeg.position.y = -0.5; // Way up
                 } else {
                     this.rightLeg.position.y = -1.5;
                 }
+                
+                if (this.rightFoot) {
+                    this.rightFoot.rotation.x = Math.sin(time + Math.PI) * 0.8;
+                }
             }
             
-            // Pumping arms while running - VERY EXAGGERATED (comedic sprint)
+            // WILDLY PUMPING arms while running (like Naruto run but backwards)
             if (this.leftArm && !this.isGrabbing) {
-                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 1.2 * intensity; // Huge arm swing
-                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time * 0.3) * 0.4; // More sway
-                this.leftArm.position.z = Math.sin(time + Math.PI) * 0.4; // Forward-back movement
+                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 2.0 * intensity; // MASSIVE arm swing
+                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time * 0.3) * 0.6; // Huge sway
+                this.leftArm.position.z = Math.sin(time + Math.PI) * 0.6; // Way forward-back
+                
+                // Hand flaps
+                if (this.leftHand) {
+                    this.leftHand.rotation.x = Math.sin(time * 2) * 1.0;
+                }
             }
             if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.x = Math.sin(time) * 1.2 * intensity; // Huge arm swing
-                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time * 0.3) * 0.4; // More sway
-                this.rightArm.position.z = Math.sin(time) * 0.4; // Forward-back movement
+                this.rightArm.rotation.x = Math.sin(time) * 2.0 * intensity; // MASSIVE arm swing
+                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time * 0.3) * 0.6;
+                this.rightArm.position.z = Math.sin(time) * 0.6;
+                
+                if (this.rightHand) {
+                    this.rightHand.rotation.x = Math.sin(time * 2 + Math.PI) * 1.0;
+                }
             }
             
-            // Head bobbing while running - MUCH MORE OBVIOUS
+            // EXTREME head bobbing and turning while running
             if (this.head) {
-                this.head.rotation.y = Math.sin(time * 0.7) * 0.3; // More head turn
-                this.head.position.y = 1.5 + Math.abs(Math.sin(time * 2)) * 0.25; // MUCH more bobbing
+                this.head.rotation.y = Math.sin(time * 0.8) * 0.5; // Big head turns
+                this.head.position.y = 2.0 + Math.abs(Math.sin(time * 2.5)) * 0.4; // HUGE bobbing
+                this.head.rotation.x = Math.sin(time * 1.5) * 0.2; // Nod
+                this.head.rotation.z = Math.sin(time * 0.6) * 0.25; // Head wobble
             }
+            
+            // Eyes dart around frantically when running
+            if (this.leftEye && this.rightEye) {
+                const eyeTime = Date.now() * 0.01;
+                this.leftEye.position.x = -0.25 + Math.sin(eyeTime) * 0.1;
+                this.rightEye.position.x = 0.25 + Math.sin(eyeTime) * 0.1;
+            }
+            
         } else if (!this.isKnockedOut && !this.isStunned) {
-            // Idle animation - breathing and fidgeting - MUCH MORE ACTIVE (Gang Beasts style)
-            const time = Date.now() * 0.004; // Faster idle for visibility
+            // MUCH MORE ACTIVE idle animation - breathing and fidgeting
+            const time = Date.now() * 0.005;
             
-            // Gentle arm sway - MORE VISIBLE
+            // Shifting weight from foot to foot
             if (this.leftArm && !this.isGrabbing) {
-                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time) * 0.15; // More sway
-                this.leftArm.rotation.x = Math.sin(time * 0.7) * 0.2; // More movement
+                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time) * 0.25;
+                this.leftArm.rotation.x = Math.sin(time * 0.7) * 0.3;
                 this.leftArm.position.z = 0;
+                if (this.leftHand) {
+                    this.leftHand.rotation.x = Math.sin(time * 1.2) * 0.3;
+                }
             }
             if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.15; // More sway
-                this.rightArm.rotation.x = Math.sin(time * 0.7 + Math.PI) * 0.2; // More movement
+                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.25;
+                this.rightArm.rotation.x = Math.sin(time * 0.7 + Math.PI) * 0.3;
                 this.rightArm.position.z = 0;
+                if (this.rightHand) {
+                    this.rightHand.rotation.x = Math.sin(time * 1.2 + Math.PI) * 0.3;
+                }
             }
             
-            // Head looking around - MORE ACTIVE (curious behavior)
+            // Head looking around curiously
             if (this.head) {
-                this.head.rotation.y = Math.sin(time * 0.5) * 0.4; // More head turn
-                this.head.rotation.x = Math.sin(time * 0.3) * 0.1;
-                this.head.position.y = 1.5 + Math.sin(time * 0.8) * 0.08; // More breathing movement
+                this.head.rotation.y = Math.sin(time * 0.5) * 0.6; // Big head turns
+                this.head.rotation.x = Math.sin(time * 0.3) * 0.15;
+                this.head.position.y = 2.0 + Math.sin(time * 1.2) * 0.12; // Breathing
+                this.head.rotation.z = Math.sin(time * 0.4) * 0.1;
             }
             
-            // Subtle leg shifting - VISIBLE weight transfer
+            // Eyes blink occasionally
+            if (this.leftEye && this.rightEye && Math.random() < 0.01) {
+                this.leftEye.scale.y = 0.1;
+                this.rightEye.scale.y = 0.1;
+                setTimeout(() => {
+                    if (this.leftEye) this.leftEye.scale.y = 1;
+                    if (this.rightEye) this.rightEye.scale.y = 1;
+                }, 100);
+            }
+            
+            // Visible weight shifting in legs
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = Math.sin(time * 0.4) * 0.12; // More movement
+                this.leftLeg.rotation.x = Math.sin(time * 0.4) * 0.2;
                 this.leftLeg.position.y = -1.5;
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = Math.sin(time * 0.4 + Math.PI) * 0.12; // More movement
+                this.rightLeg.rotation.x = Math.sin(time * 0.4 + Math.PI) * 0.2;
                 this.rightLeg.position.y = -1.5;
             }
         }
         
-        // Enhanced ragdoll physics for knocked out characters - MUCH MORE DRAMATIC
+        // MUCH MORE DRAMATIC ragdoll physics for knocked out characters
         if (this.isKnockedOut && !this.isGrabbed) {
-            // Make limbs loose and VERY floppy with exaggerated physics-based wobble
-            const wobble = Math.sin(Date.now() * 0.025) * 1.5; // Much stronger wobble
-            const wobble2 = Math.cos(Date.now() * 0.020) * 1.5;
+            // Make limbs VERY floppy with exaggerated physics-based wobble
+            const wobble = Math.sin(Date.now() * 0.03) * 2.0; // Much stronger
+            const wobble2 = Math.cos(Date.now() * 0.025) * 2.0;
             
             if (this.leftArm) {
-                this.leftArm.rotation.z = wobble * 1.5; // Much more dramatic
-                this.leftArm.rotation.x = wobble2 * 1.2;
+                this.leftArm.rotation.z = wobble * 2.0; // Super dramatic
+                this.leftArm.rotation.x = wobble2 * 1.8;
+                if (this.leftHand) this.leftHand.rotation.x = wobble * 1.5;
             }
             if (this.rightArm) {
-                this.rightArm.rotation.z = -wobble * 1.5;
-                this.rightArm.rotation.x = -wobble2 * 1.2;
+                this.rightArm.rotation.z = -wobble * 2.0;
+                this.rightArm.rotation.x = -wobble2 * 1.8;
+                if (this.rightHand) this.rightHand.rotation.x = -wobble * 1.5;
             }
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = wobble2 * 1.0; // Much more dramatic
-                this.leftLeg.rotation.z = wobble * 0.6;
+                this.leftLeg.rotation.x = wobble2 * 1.5;
+                this.leftLeg.rotation.z = wobble * 0.8;
+                if (this.leftFoot) this.leftFoot.rotation.x = wobble * 0.8;
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = -wobble2 * 1.0;
-                this.rightLeg.rotation.z = -wobble * 0.6;
+                this.rightLeg.rotation.x = -wobble2 * 1.5;
+                this.rightLeg.rotation.z = -wobble * 0.8;
+                if (this.rightFoot) this.rightFoot.rotation.x = -wobble * 0.8;
             }
             
-            // Head lolling - VERY OBVIOUSLY unconscious
+            // Head lolling dramatically - VERY OBVIOUSLY unconscious
             if (this.head) {
-                this.head.rotation.x = wobble * 0.8; // Much more dramatic
-                this.head.rotation.y = wobble2 * 1.0;
-                this.head.rotation.z = wobble * 0.6;
+                this.head.rotation.x = wobble * 1.2;
+                this.head.rotation.y = wobble2 * 1.5;
+                this.head.rotation.z = wobble * 0.8;
+            }
+            
+            // Eyes rolled back or closed
+            if (this.leftEye && this.rightEye) {
+                this.leftEye.position.y = 0.05; // Rolled up
+                this.rightEye.position.y = 0.05;
+            }
+            
+            // Mouth hanging open
+            if (this.mouth) {
+                this.mouth.scale.set(1.2, 1.5, 1);
+                this.mouth.rotation.z = wobble * 0.3;
             }
         }
     }
