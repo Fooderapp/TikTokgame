@@ -405,7 +405,9 @@ class Character {
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
             linearDamping: 0.2, // Reduced damping for better movement
             angularDamping: 0.95, // Very high to strongly resist rotation
-            fixedRotation: false // Allow rotation but heavily controlled
+            fixedRotation: false, // Allow rotation but heavily controlled
+            sleepSpeedLimit: 0.01, // Very low threshold to prevent unwanted sleeping
+            sleepTimeLimit: 100 // Only sleep after being still for a long time
         });
         
         // Ensure body starts perfectly upright
@@ -514,6 +516,9 @@ class Character {
         
         // Update AI
         this.updateAI();
+        
+        // Always keep physics body awake during active gameplay
+        this.body.wakeUp();
         
         // Cooldown management
         if (this.actionCooldown > 0) {
@@ -731,15 +736,13 @@ class Character {
             this.moveTowards(this.aiTarget.body.position);
         } else if (!this.isStunned) {
             // In optimal range, circle and prepare to attack (Party Animals behavior)
-            // Add slight random movement to make it more dynamic and unpredictable
-            if (this.aiTimer % 25 === 0) {
-                const circleDirection = new CANNON.Vec3(
-                    (Math.random() - 0.5) * 50,
-                    0,
-                    (Math.random() - 0.5) * 50
-                );
-                this.body.applyForce(circleDirection, this.body.position);
-            }
+            // Add continuous movement to stay dynamic and unpredictable
+            const circleDirection = new CANNON.Vec3(
+                (Math.random() - 0.5) * 80,
+                0,
+                (Math.random() - 0.5) * 80
+            );
+            this.body.applyForce(circleDirection, this.body.position);
             
             // Occasional feint - wind up but don't attack
             if (this.aiTimer % 80 === 0 && Math.random() < 0.3) {
@@ -766,24 +769,29 @@ class Character {
             Math.pow(this.body.position.x, 2) + Math.pow(this.body.position.z, 2)
         );
         
-        // If too close to edge, move back toward center
-        if (distFromCenter > 12) {
+        const direction = new CANNON.Vec3();
+        direction.copy(targetPos);
+        direction.vsub(this.body.position);
+        direction.y = 0; // Don't move vertically
+        direction.normalize();
+        
+        // If too close to edge, blend in center-seeking force
+        if (distFromCenter > 11) {
             const toCenterDirection = new CANNON.Vec3(
                 -this.body.position.x,
                 0,
                 -this.body.position.z
             );
             toCenterDirection.normalize();
-            const force = toCenterDirection.scale(200 * this.speed); // Increased force to return to center
-            this.body.applyForce(force, this.body.position);
-            return;
+            
+            // Blend forces: more toward center as we get closer to edge
+            const centerWeight = Math.min((distFromCenter - 11) / 3, 1); // 0 to 1 as dist goes from 11 to 14
+            const targetWeight = 1 - centerWeight;
+            
+            direction.x = direction.x * targetWeight + toCenterDirection.x * centerWeight;
+            direction.z = direction.z * targetWeight + toCenterDirection.z * centerWeight;
+            direction.normalize();
         }
-        
-        const direction = new CANNON.Vec3();
-        direction.copy(targetPos);
-        direction.vsub(this.body.position);
-        direction.y = 0; // Don't move vertically
-        direction.normalize();
         
         // Apply force at the center of mass for better balance
         const force = direction.scale(400 * this.speed); // Increased force for more visible movement
