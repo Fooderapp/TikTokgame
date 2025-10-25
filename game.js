@@ -118,11 +118,11 @@ class Game {
             0.1,
             1000
         );
-        // Better initial camera position - closer to the action
+        // Better initial camera position - optimal view of the action
         // Adjust based on aspect ratio for responsive design
-        const cameraZ = this.getAspectRatio() > 1 ? 35 : 45; // Closer for landscape, further for portrait
-        this.camera.position.set(0, 20, cameraZ);
-        this.camera.lookAt(0, -2, 0); // Look at platform level
+        const cameraZ = this.getAspectRatio() > 1 ? 30 : 40; // Even closer for better view
+        this.camera.position.set(0, 18, cameraZ); // Slightly lower angle
+        this.camera.lookAt(0, -3, 0); // Look at platform level
     }
     
     getAspectRatio() {
@@ -154,8 +154,8 @@ class Game {
     setupControls() {
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
-        let cameraRotation = { x: 0.35, y: 0 }; // Slightly lower angle for better view
-        let cameraDistance = this.getAspectRatio() > 1 ? 35 : 45; // Match camera setup
+        let cameraRotation = { x: 0.3, y: 0 }; // Slightly lower angle for better view
+        let cameraDistance = this.getAspectRatio() > 1 ? 30 : 40; // Match camera setup - closer
         
         const canvas = this.renderer.domElement;
         
@@ -232,9 +232,9 @@ class Game {
         // Update camera position based on rotation
         this.updateCamera = () => {
             this.camera.position.x = Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
-            this.camera.position.y = Math.sin(cameraRotation.x) * cameraDistance + 10; // Lower base for better view
+            this.camera.position.y = Math.sin(cameraRotation.x) * cameraDistance + 8; // Lower base for better action view
             this.camera.position.z = Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
-            this.camera.lookAt(0, -2, 0); // Look at platform level
+            this.camera.lookAt(0, -3, 0); // Look at platform level
         };
     }
     
@@ -392,8 +392,8 @@ class Character {
         this.game.scene.add(this.mesh);
         
         // Spawn position based on team - ON the platform, further from edges
-        const spawnX = this.team === 'blue' ? -8 : 8;
-        const spawnZ = (Math.random() - 0.5) * 6; // Narrower Z range
+        const spawnX = this.team === 'blue' ? -6 : 6; // Closer to center to avoid edge issues
+        const spawnZ = (Math.random() - 0.5) * 4; // Even narrower Z range (-2 to +2)
         const spawnY = -2; // Just above platform surface (platform top is at -4, character radius 1.2)
         
         // Physics body - use box shape for upright standing (Gang Beasts style)
@@ -403,9 +403,11 @@ class Character {
             mass: 5,
             shape: bodyShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.4, // High damping for stability
+            linearDamping: 0.1, // Very low damping for maximum movement
             angularDamping: 0.95, // Very high to strongly resist rotation
-            fixedRotation: false // Allow rotation but heavily controlled
+            fixedRotation: false, // Allow rotation but heavily controlled
+            sleepSpeedLimit: 0.01, // Very low threshold to prevent unwanted sleeping
+            sleepTimeLimit: 100 // Only sleep after being still for a long time
         });
         
         // Ensure body starts perfectly upright
@@ -515,6 +517,9 @@ class Character {
         // Update AI
         this.updateAI();
         
+        // Always keep physics body awake during active gameplay
+        this.body.wakeUp();
+        
         // Cooldown management
         if (this.actionCooldown > 0) {
             this.actionCooldown--;
@@ -591,46 +596,54 @@ class Character {
     }
     
     animateStruggle() {
-        // Flailing animation when grabbed (Party Animals style)
-        const time = Date.now() * 0.02;
-        const intensity = 0.8;
+        // Flailing animation when grabbed - MUCH MORE DRAMATIC (Party Animals style)
+        const time = Date.now() * 0.03; // Faster for more visibility
+        const intensity = 1.2; // Much stronger struggle
         
         if (this.leftArm) {
-            this.leftArm.rotation.x = Math.sin(time * 1.5) * intensity;
+            this.leftArm.rotation.x = Math.sin(time * 1.5) * intensity * 1.2; // Huge arm flailing
             this.leftArm.rotation.z = Math.PI / 4 + Math.cos(time * 1.2) * intensity;
         }
         if (this.rightArm) {
-            this.rightArm.rotation.x = Math.sin(time * 1.3 + Math.PI) * intensity;
+            this.rightArm.rotation.x = Math.sin(time * 1.3 + Math.PI) * intensity * 1.2;
             this.rightArm.rotation.z = -Math.PI / 4 + Math.cos(time * 1.4) * intensity;
         }
         if (this.leftLeg) {
-            this.leftLeg.rotation.x = Math.sin(time * 1.1) * 0.5;
+            this.leftLeg.rotation.x = Math.sin(time * 1.1) * 0.8; // Kicking motion
         }
         if (this.rightLeg) {
-            this.rightLeg.rotation.x = Math.sin(time * 1.1 + Math.PI) * 0.5;
+            this.rightLeg.rotation.x = Math.sin(time * 1.1 + Math.PI) * 0.8;
         }
         if (this.head) {
-            this.head.rotation.y = Math.sin(time * 0.8) * 0.3;
+            this.head.rotation.y = Math.sin(time * 0.8) * 0.5; // More dramatic head shake
+            this.head.rotation.x = Math.sin(time * 0.9) * 0.3; // More movement
         }
     }
     
     animateStagger() {
-        // Stumbling animation after being hit (comedic effect)
+        // Stumbling animation after being hit - MUCH MORE VISIBLE (comedic effect)
         const time = Date.now() - this.lastHitTime;
         const t = time / 800; // 0 to 1 over stun duration
-        const wobble = Math.sin(time * 0.03) * (1 - t) * 0.6;
+        const wobble = Math.sin(time * 0.05) * (1 - t) * 1.0; // Much stronger wobble
         
         if (this.leftArm) {
-            this.leftArm.rotation.z = Math.PI / 4 + wobble;
-            this.leftArm.rotation.x = wobble * 0.5;
+            this.leftArm.rotation.z = Math.PI / 4 + wobble * 1.2; // Big arm wobble
+            this.leftArm.rotation.x = wobble * 0.8;
         }
         if (this.rightArm) {
-            this.rightArm.rotation.z = -Math.PI / 4 - wobble;
-            this.rightArm.rotation.x = -wobble * 0.5;
+            this.rightArm.rotation.z = -Math.PI / 4 - wobble * 1.2;
+            this.rightArm.rotation.x = -wobble * 0.8;
         }
         if (this.head) {
-            this.head.rotation.x = wobble * 0.3;
-            this.head.rotation.z = wobble * 0.4;
+            this.head.rotation.x = wobble * 0.6; // More head movement
+            this.head.rotation.z = wobble * 0.7;
+        }
+        // Add leg stagger
+        if (this.leftLeg) {
+            this.leftLeg.rotation.x = wobble * 0.4;
+        }
+        if (this.rightLeg) {
+            this.rightLeg.rotation.x = -wobble * 0.4;
         }
     }
     
@@ -723,14 +736,24 @@ class Character {
             this.moveTowards(this.aiTarget.body.position);
         } else if (!this.isStunned) {
             // In optimal range, circle and prepare to attack (Party Animals behavior)
-            // Add slight random movement to make it more dynamic and unpredictable
-            if (this.aiTimer % 25 === 0) {
-                const circleDirection = new CANNON.Vec3(
-                    (Math.random() - 0.5) * 50,
+            // Add continuous movement to stay dynamic and unpredictable
+            const CIRCLE_FORCE_MAGNITUDE = 100; // Force magnitude for circling behavior
+            const circleDirection = new CANNON.Vec3(
+                (Math.random() - 0.5) * CIRCLE_FORCE_MAGNITUDE,
+                0,
+                (Math.random() - 0.5) * CIRCLE_FORCE_MAGNITUDE
+            );
+            this.body.applyForce(circleDirection, this.body.position);
+            
+            // Add small impulses periodically to maintain movement when velocity is low
+            const currentSpeed = Math.sqrt(this.body.velocity.x**2 + this.body.velocity.z**2);
+            if (this.aiTimer % 20 === 0 && currentSpeed < 2) {
+                const impulse = new CANNON.Vec3(
+                    (Math.random() - 0.5) * 5,
                     0,
-                    (Math.random() - 0.5) * 50
+                    (Math.random() - 0.5) * 5
                 );
-                this.body.applyForce(circleDirection, this.body.position);
+                this.body.applyImpulse(impulse, this.body.position);
             }
             
             // Occasional feint - wind up but don't attack
@@ -758,34 +781,39 @@ class Character {
             Math.pow(this.body.position.x, 2) + Math.pow(this.body.position.z, 2)
         );
         
-        // If too close to edge, move back toward center
-        if (distFromCenter > 12) {
-            const toCenterDirection = new CANNON.Vec3(
-                -this.body.position.x,
-                0,
-                -this.body.position.z
-            );
-            toCenterDirection.normalize();
-            const force = toCenterDirection.scale(100 * this.speed);
-            this.body.applyForce(force, this.body.position);
-            return;
-        }
-        
         const direction = new CANNON.Vec3();
         direction.copy(targetPos);
         direction.vsub(this.body.position);
         direction.y = 0; // Don't move vertically
         direction.normalize();
         
+        // If too close to edge, blend in center-seeking force
+        if (distFromCenter > 11) {
+            const toCenterDirection = new CANNON.Vec3(
+                -this.body.position.x,
+                0,
+                -this.body.position.z
+            );
+            toCenterDirection.normalize();
+            
+            // Blend forces: more toward center as we get closer to edge
+            const centerWeight = Math.min((distFromCenter - 11) / 3, 1); // 0 to 1 as dist goes from 11 to 14
+            const targetWeight = 1 - centerWeight;
+            
+            direction.x = direction.x * targetWeight + toCenterDirection.x * centerWeight;
+            direction.z = direction.z * targetWeight + toCenterDirection.z * centerWeight;
+            direction.normalize();
+        }
+        
         // Apply force at the center of mass for better balance
-        const force = direction.scale(250 * this.speed); // Balanced force strength
+        const force = direction.scale(600 * this.speed); // Much stronger force for visible movement
         this.body.applyForce(force, this.body.position);
         
         // Wake up the body if it's sleeping
         this.body.wakeUp();
         
         // Limit speed
-        const maxSpeed = 12 * this.speed; // Controlled max speed for better balance
+        const maxSpeed = 20 * this.speed; // Much higher max speed for dynamic action
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
@@ -1238,116 +1266,116 @@ class Character {
     }
     
     animateLimbs() {
-        // Enhanced limb animations for more comedic effect (Party Animals style)
+        // GREATLY ENHANCED limb animations for VERY VISIBLE movement (Party Animals style)
         const speed = Math.sqrt(
             this.body.velocity.x * this.body.velocity.x +
             this.body.velocity.z * this.body.velocity.z
         );
         
-        if (speed > 0.5 && !this.isKnockedOut && !this.isStunned) {
-            // Running animation with exaggerated movements
-            const time = Date.now() * 0.01; // Faster animation
-            const intensity = Math.min(speed / 5, 1.5); // Scale with speed
+        if (speed > 0.3 && !this.isKnockedOut && !this.isStunned) {
+            // Running animation with MUCH MORE exaggerated movements
+            const time = Date.now() * 0.02; // Much faster animation for visibility
+            const intensity = Math.min(speed / 3, 2.5); // Higher intensity, scale with speed
             
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = Math.sin(time) * 0.8 * intensity;
-                this.leftLeg.rotation.z = Math.sin(time * 0.5) * 0.15;
-                // High knee lift when running fast
-                if (Math.sin(time) > 0.5) {
-                    this.leftLeg.position.y = -1.3;
+                this.leftLeg.rotation.x = Math.sin(time) * 1.2 * intensity; // MUCH more swing
+                this.leftLeg.rotation.z = Math.sin(time * 0.5) * 0.25; // More lateral movement
+                // HIGH knee lift when running fast - VERY VISIBLE
+                if (Math.sin(time) > 0.3) {
+                    this.leftLeg.position.y = -1.0; // Much higher knee
                 } else {
                     this.leftLeg.position.y = -1.5;
                 }
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = Math.sin(time + Math.PI) * 0.8 * intensity;
-                this.rightLeg.rotation.z = Math.sin(time * 0.5 + Math.PI) * 0.15;
-                if (Math.sin(time + Math.PI) > 0.5) {
-                    this.rightLeg.position.y = -1.3;
+                this.rightLeg.rotation.x = Math.sin(time + Math.PI) * 1.2 * intensity; // MUCH more swing
+                this.rightLeg.rotation.z = Math.sin(time * 0.5 + Math.PI) * 0.25;
+                if (Math.sin(time + Math.PI) > 0.3) {
+                    this.rightLeg.position.y = -1.0; // Much higher knee
                 } else {
                     this.rightLeg.position.y = -1.5;
                 }
             }
             
-            // Pumping arms while running (comedic sprint)
+            // Pumping arms while running - VERY EXAGGERATED (comedic sprint)
             if (this.leftArm && !this.isGrabbing) {
-                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 0.6 * intensity;
-                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time * 0.3) * 0.2;
-                this.leftArm.position.z = Math.sin(time + Math.PI) * 0.2;
+                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 1.2 * intensity; // Huge arm swing
+                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time * 0.3) * 0.4; // More sway
+                this.leftArm.position.z = Math.sin(time + Math.PI) * 0.4; // Forward-back movement
             }
             if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.x = Math.sin(time) * 0.6 * intensity;
-                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time * 0.3) * 0.2;
-                this.rightArm.position.z = Math.sin(time) * 0.2;
+                this.rightArm.rotation.x = Math.sin(time) * 1.2 * intensity; // Huge arm swing
+                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time * 0.3) * 0.4; // More sway
+                this.rightArm.position.z = Math.sin(time) * 0.4; // Forward-back movement
             }
             
-            // Head bobbing while running
+            // Head bobbing while running - MUCH MORE OBVIOUS
             if (this.head) {
-                this.head.rotation.y = Math.sin(time * 0.7) * 0.15;
-                this.head.position.y = 1.5 + Math.abs(Math.sin(time * 2)) * 0.1;
+                this.head.rotation.y = Math.sin(time * 0.7) * 0.3; // More head turn
+                this.head.position.y = 1.5 + Math.abs(Math.sin(time * 2)) * 0.25; // MUCH more bobbing
             }
         } else if (!this.isKnockedOut && !this.isStunned) {
-            // Idle animation - breathing and fidgeting (Gang Beasts style)
-            const time = Date.now() * 0.002;
+            // Idle animation - breathing and fidgeting - MUCH MORE ACTIVE (Gang Beasts style)
+            const time = Date.now() * 0.004; // Faster idle for visibility
             
-            // Gentle arm sway
+            // Gentle arm sway - MORE VISIBLE
             if (this.leftArm && !this.isGrabbing) {
-                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time) * 0.08;
-                this.leftArm.rotation.x = Math.sin(time * 0.7) * 0.1;
+                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time) * 0.15; // More sway
+                this.leftArm.rotation.x = Math.sin(time * 0.7) * 0.2; // More movement
                 this.leftArm.position.z = 0;
             }
             if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.08;
-                this.rightArm.rotation.x = Math.sin(time * 0.7 + Math.PI) * 0.1;
+                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.15; // More sway
+                this.rightArm.rotation.x = Math.sin(time * 0.7 + Math.PI) * 0.2; // More movement
                 this.rightArm.position.z = 0;
             }
             
-            // Head looking around (curious behavior)
+            // Head looking around - MORE ACTIVE (curious behavior)
             if (this.head) {
-                this.head.rotation.y = Math.sin(time * 0.5) * 0.2;
-                this.head.rotation.x = Math.sin(time * 0.3) * 0.05;
-                this.head.position.y = 1.5 + Math.sin(time * 0.8) * 0.03; // Breathing
+                this.head.rotation.y = Math.sin(time * 0.5) * 0.4; // More head turn
+                this.head.rotation.x = Math.sin(time * 0.3) * 0.1;
+                this.head.position.y = 1.5 + Math.sin(time * 0.8) * 0.08; // More breathing movement
             }
             
-            // Subtle leg shifting (weight transfer)
+            // Subtle leg shifting - VISIBLE weight transfer
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = Math.sin(time * 0.4) * 0.05;
+                this.leftLeg.rotation.x = Math.sin(time * 0.4) * 0.12; // More movement
                 this.leftLeg.position.y = -1.5;
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = Math.sin(time * 0.4 + Math.PI) * 0.05;
+                this.rightLeg.rotation.x = Math.sin(time * 0.4 + Math.PI) * 0.12; // More movement
                 this.rightLeg.position.y = -1.5;
             }
         }
         
-        // Enhanced ragdoll physics for knocked out characters
+        // Enhanced ragdoll physics for knocked out characters - MUCH MORE DRAMATIC
         if (this.isKnockedOut && !this.isGrabbed) {
-            // Make limbs loose and floppy with physics-based wobble
-            const wobble = Math.sin(Date.now() * 0.015);
-            const wobble2 = Math.cos(Date.now() * 0.012);
+            // Make limbs loose and VERY floppy with exaggerated physics-based wobble
+            const wobble = Math.sin(Date.now() * 0.025) * 1.5; // Much stronger wobble
+            const wobble2 = Math.cos(Date.now() * 0.020) * 1.5;
             
             if (this.leftArm) {
-                this.leftArm.rotation.z = wobble * 1.2;
-                this.leftArm.rotation.x = wobble2 * 0.8;
+                this.leftArm.rotation.z = wobble * 1.5; // Much more dramatic
+                this.leftArm.rotation.x = wobble2 * 1.2;
             }
             if (this.rightArm) {
-                this.rightArm.rotation.z = -wobble * 1.2;
-                this.rightArm.rotation.x = -wobble2 * 0.8;
+                this.rightArm.rotation.z = -wobble * 1.5;
+                this.rightArm.rotation.x = -wobble2 * 1.2;
             }
             if (this.leftLeg) {
-                this.leftLeg.rotation.x = wobble2 * 0.6;
-                this.leftLeg.rotation.z = wobble * 0.3;
+                this.leftLeg.rotation.x = wobble2 * 1.0; // Much more dramatic
+                this.leftLeg.rotation.z = wobble * 0.6;
             }
             if (this.rightLeg) {
-                this.rightLeg.rotation.x = -wobble2 * 0.6;
-                this.rightLeg.rotation.z = -wobble * 0.3;
+                this.rightLeg.rotation.x = -wobble2 * 1.0;
+                this.rightLeg.rotation.z = -wobble * 0.6;
             }
             
-            // Head lolling (unconscious)
+            // Head lolling - VERY OBVIOUSLY unconscious
             if (this.head) {
-                this.head.rotation.x = wobble * 0.4;
-                this.head.rotation.y = wobble2 * 0.5;
-                this.head.rotation.z = wobble * 0.3;
+                this.head.rotation.x = wobble * 0.8; // Much more dramatic
+                this.head.rotation.y = wobble2 * 1.0;
+                this.head.rotation.z = wobble * 0.6;
             }
         }
     }
