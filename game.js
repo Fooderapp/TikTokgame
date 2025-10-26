@@ -20,6 +20,7 @@ class Game {
         // Time tracking for deltaTime
         this.lastTime = performance.now();
         this.useAnimatedCharacters = true; // Toggle for new animation system
+        this.useHybridCharacters = true; // Use new hybrid physics/animation system
         
         this.init();
     }
@@ -243,8 +244,16 @@ class Game {
     }
     
     spawnCharacter(team) {
-        // Use new AnimatedCharacter system for better animations
-        const CharacterClass = this.useAnimatedCharacters ? AnimatedCharacter : PhysicsCharacter;
+        // Use new HybridCharacter system for best of both worlds
+        let CharacterClass;
+        if (this.useHybridCharacters) {
+            CharacterClass = HybridCharacter;
+        } else if (this.useAnimatedCharacters) {
+            CharacterClass = AnimatedCharacter;
+        } else {
+            CharacterClass = PhysicsCharacter;
+        }
+        
         const character = new CharacterClass(this, team);
         this.characters.push(character);
         this.updateCharacterCount();
@@ -348,7 +357,7 @@ class Game {
         for (let i = this.characters.length - 1; i >= 0; i--) {
             const char = this.characters[i];
             // Pass deltaTime for smooth animations
-            if (this.useAnimatedCharacters) {
+            if (this.useHybridCharacters || this.useAnimatedCharacters) {
                 char.update(clampedDeltaTime);
             } else {
                 char.update();
