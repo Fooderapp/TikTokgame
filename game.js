@@ -239,7 +239,7 @@ class Game {
     }
     
     spawnCharacter(team) {
-        const character = new Character(this, team);
+        const character = new PhysicsCharacter(this, team);
         this.characters.push(character);
         this.updateCharacterCount();
         return character;
