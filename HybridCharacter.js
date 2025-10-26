@@ -31,6 +31,12 @@ class HybridCharacter {
         this.animationTime = 0;
         this.legPhase = 0;
         
+        // Attack timers (frame-based)
+        this.punchTimer = 0;
+        this.kickTimer = 0;
+        this.punchHitPos = null;
+        this.kickDirection = null;
+        
         // Physics bodies - organized by function
         this.bodies = {};
         this.constraints = [];
@@ -271,6 +277,30 @@ class HybridCharacter {
     update(deltaTime) {
         // Update animation time
         this.animationTime += deltaTime;
+        
+        // Handle attack timers
+        if (this.punchTimer > 0) {
+            this.punchTimer--;
+            if (this.punchTimer === 0 && this.punchHitPos && this.isAlive) {
+                this.checkHit(this.punchHitPos, 2.0, 20);
+                this.currentAnimation = 'idle';
+                this.punchHitPos = null;
+            }
+        }
+        
+        if (this.kickTimer > 0) {
+            this.kickTimer--;
+            if (this.kickTimer === 0 && this.kickDirection && this.isAlive) {
+                const kickPos = new CANNON.Vec3(
+                    this.body.position.x + this.kickDirection.x * 1.5,
+                    this.body.position.y,
+                    this.body.position.z + this.kickDirection.z * 1.5
+                );
+                this.checkHit(kickPos, 2.5, 35);
+                this.currentAnimation = 'idle';
+                this.kickDirection = null;
+            }
+        }
         
         // Power boost timer
         if (this.powerBoostTimer > 0) {
@@ -608,6 +638,7 @@ class HybridCharacter {
     
     punch() {
         this.currentAnimation = 'punching';
+        this.punchTimer = 9; // ~150ms at 60fps
         
         // Apply strong force to right hand for punching
         const hand = this.bodies.rightHand;
@@ -620,15 +651,13 @@ class HybridCharacter {
             hand.position
         );
         
-        // Check for hit after a short delay
-        setTimeout(() => {
-            this.checkHit(hand.position, 2.0, 20);
-            this.currentAnimation = 'idle';
-        }, 150);
+        // Store position for hit check
+        this.punchHitPos = hand.position.clone();
     }
     
     dropkick() {
         this.currentAnimation = 'kicking';
+        this.kickTimer = 12; // ~200ms at 60fps
         
         // Jump
         this.body.applyForce(new CANNON.Vec3(0, 400, 0), this.body.position);
@@ -643,16 +672,8 @@ class HybridCharacter {
             this.body.position
         );
         
-        // Check for kick hit
-        setTimeout(() => {
-            const kickPos = new CANNON.Vec3(
-                this.body.position.x + direction.x * 1.5,
-                this.body.position.y,
-                this.body.position.z + direction.z * 1.5
-            );
-            this.checkHit(kickPos, 2.5, 35);
-            this.currentAnimation = 'idle';
-        }, 200);
+        // Store direction for hit check
+        this.kickDirection = direction.clone();
     }
     
     checkHit(attackPos, range, damage) {
