@@ -55,21 +55,21 @@ class HybridCharacter {
         const color = this.team === 'blue' ? 0x4A90E2 : 0xE24A4A;
         const spawnX = this.team === 'blue' ? -8 : 8;
         const spawnZ = 0;
-        const spawnY = 2;
+        const spawnY = 0; // Spawn on ground level (-4 is platform, + 1.5 for height = -2.5, but visual offset)
         
         // === SELF-BALANCING CAPSULE (Torso + Hips) ===
         // This is the main body that stays balanced
         const capsuleShape = new CANNON.Cylinder(0.4, 0.4, 1.8, 12);
         const capsuleBody = new CANNON.Body({
-            mass: 8,
+            mass: 10, // Increased mass for better ground contact
             shape: capsuleShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.3,
-            angularDamping: 0.8
+            linearDamping: 0.5, // Increased damping to prevent sliding
+            angularDamping: 0.95 // Much higher to prevent spinning
         });
         capsuleBody.material = new CANNON.Material();
-        capsuleBody.material.friction = 0.8;
-        capsuleBody.material.restitution = 0.1;
+        capsuleBody.material.friction = 1.0; // Maximum friction for no sliding
+        capsuleBody.material.restitution = 0.0; // No bounce
         this.game.world.addBody(capsuleBody);
         this.bodies.torso = capsuleBody;
         this.body = capsuleBody; // Main body reference
@@ -85,11 +85,11 @@ class HybridCharacter {
         // === HEAD (attached to capsule) ===
         const headShape = new CANNON.Sphere(0.35);
         const headBody = new CANNON.Body({
-            mass: 1.5,
+            mass: 1.2, // Reduced mass for less momentum
             shape: headShape,
             position: new CANNON.Vec3(spawnX, spawnY + 1.3, spawnZ),
-            linearDamping: 0.4,
-            angularDamping: 0.7
+            linearDamping: 0.8, // Much higher damping for stability
+            angularDamping: 0.95 // Very high to prevent head spinning
         });
         this.game.world.addBody(headBody);
         this.bodies.head = headBody;
@@ -112,7 +112,7 @@ class HybridCharacter {
         headMesh.add(leftEye);
         headMesh.add(rightEye);
         
-        // Connect head to torso with point constraint
+        // Connect head to torso with stronger constraint
         const headConstraint = new CANNON.PointToPointConstraint(
             capsuleBody,
             new CANNON.Vec3(0, 0.9, 0),
@@ -122,6 +122,17 @@ class HybridCharacter {
         headConstraint.collideConnected = false;
         this.game.world.addConstraint(headConstraint);
         this.constraints.push(headConstraint);
+        
+        // Add second constraint for head stability (prevents rotation)
+        const headConstraint2 = new CANNON.PointToPointConstraint(
+            capsuleBody,
+            new CANNON.Vec3(0, 0.9, 0.2),
+            headBody,
+            new CANNON.Vec3(0, -0.2, 0.3)
+        );
+        headConstraint2.collideConnected = false;
+        this.game.world.addConstraint(headConstraint2);
+        this.constraints.push(headConstraint2);
         
         // === RAGDOLL ARMS (for realistic punching and grabbing) ===
         this.createRagdollArm('left', spawnX, spawnY, spawnZ, color, skinMat);
@@ -137,11 +148,11 @@ class HybridCharacter {
         // Upper arm
         const upperArmShape = new CANNON.Box(new CANNON.Vec3(0.12, 0.4, 0.12));
         const upperArmBody = new CANNON.Body({
-            mass: 0.8,
+            mass: 0.6, // Reduced mass for easier control
             shape: upperArmShape,
             position: new CANNON.Vec3(x + xOffset, y + 0.5, z),
-            linearDamping: 0.6,
-            angularDamping: 0.7
+            linearDamping: 0.8, // Increased damping for stability
+            angularDamping: 0.85 // Higher damping to reduce flailing
         });
         this.game.world.addBody(upperArmBody);
         this.bodies[`${side}UpperArm`] = upperArmBody;
@@ -167,11 +178,11 @@ class HybridCharacter {
         // Forearm
         const forearmShape = new CANNON.Box(new CANNON.Vec3(0.1, 0.35, 0.1));
         const forearmBody = new CANNON.Body({
-            mass: 0.6,
+            mass: 0.5, // Reduced mass
             shape: forearmShape,
             position: new CANNON.Vec3(x + xOffset, y - 0.3, z),
-            linearDamping: 0.6,
-            angularDamping: 0.7
+            linearDamping: 0.8, // Increased damping
+            angularDamping: 0.85 // Higher damping
         });
         this.game.world.addBody(forearmBody);
         this.bodies[`${side}Forearm`] = forearmBody;
@@ -200,11 +211,11 @@ class HybridCharacter {
         // Hand
         const handShape = new CANNON.Sphere(0.15);
         const handBody = new CANNON.Body({
-            mass: 0.4,
+            mass: 0.3, // Reduced mass
             shape: handShape,
             position: new CANNON.Vec3(x + xOffset, y - 1.0, z),
-            linearDamping: 0.5,
-            angularDamping: 0.7
+            linearDamping: 0.8, // Increased damping
+            angularDamping: 0.85 // Higher damping
         });
         this.game.world.addBody(handBody);
         this.bodies[`${side}Hand`] = handBody;
@@ -349,33 +360,85 @@ class HybridCharacter {
         
         const torso = this.bodies.torso;
         
-        // Keep capsule upright with strong stabilization
-        const targetHeight = 0.9; // Height above platform
-        if (torso.position.y < targetHeight) {
-            const upForce = (targetHeight - torso.position.y) * 500 * this.speed;
+        // Ground contact detection - only apply upward force if on ground
+        const isOnGround = torso.position.y < -2.5; // Platform is at -5, character bottom at ~-3.5
+        
+        // Keep capsule at proper height with gentle stabilization (not jumping)
+        const targetHeight = -3.1; // Just above platform surface
+        const heightDiff = targetHeight - torso.position.y;
+        
+        if (isOnGround && heightDiff > 0.1) {
+            // Only apply force if significantly below target
+            const upForce = heightDiff * 300 * this.speed;
             torso.applyForce(new CANNON.Vec3(0, upForce, 0), torso.position);
+        } else if (heightDiff < -0.1) {
+            // Apply downward force if too high (prevent jumping)
+            const downForce = heightDiff * 200;
+            torso.applyForce(new CANNON.Vec3(0, downForce, 0), torso.position);
+        }
+        
+        // Limit vertical velocity to prevent jumping/bouncing
+        if (torso.velocity.y > 2) {
+            torso.velocity.y = 2;
         }
         
         // Strong angular damping to keep upright
-        torso.angularVelocity.scale(0.5, torso.angularVelocity);
+        torso.angularVelocity.scale(0.3, torso.angularVelocity);
         
         // Actively correct rotation to stay upright
         const uprightQuat = new CANNON.Quaternion();
         uprightQuat.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
         
         // Blend towards upright
-        const blendFactor = 0.08;
+        const blendFactor = 0.15; // Stronger correction
         torso.quaternion.x = torso.quaternion.x * (1 - blendFactor) + uprightQuat.x * blendFactor;
         torso.quaternion.z = torso.quaternion.z * (1 - blendFactor) + uprightQuat.z * blendFactor;
         torso.quaternion.normalize();
         
-        // Apply arm damping to prevent flailing when not attacking
+        // Apply strong arm damping and position correction when not attacking
         if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
-            ['leftUpperArm', 'rightUpperArm', 'leftForearm', 'rightForearm'].forEach(part => {
+            // Stabilize arms by dampening angular velocity heavily
+            ['leftUpperArm', 'rightUpperArm', 'leftForearm', 'rightForearm', 'leftHand', 'rightHand'].forEach(part => {
                 if (this.bodies[part]) {
-                    this.bodies[part].angularVelocity.scale(0.8, this.bodies[part].angularVelocity);
+                    // Much stronger damping for idle arms
+                    this.bodies[part].angularVelocity.scale(0.5, this.bodies[part].angularVelocity);
+                    this.bodies[part].velocity.scale(0.7, this.bodies[part].velocity);
                 }
             });
+            
+            // Apply gentle forces to keep arms near rest position
+            const leftArm = this.bodies.leftUpperArm;
+            const rightArm = this.bodies.rightUpperArm;
+            if (leftArm && rightArm) {
+                // Target position relative to torso
+                const targetLeftPos = new CANNON.Vec3(
+                    torso.position.x - 0.5,
+                    torso.position.y + 0.3,
+                    torso.position.z
+                );
+                const targetRightPos = new CANNON.Vec3(
+                    torso.position.x + 0.5,
+                    torso.position.y + 0.3,
+                    torso.position.z
+                );
+                
+                // Apply gentle return force
+                const returnForce = 15;
+                const leftDiff = new CANNON.Vec3();
+                targetLeftPos.vsub(leftArm.position, leftDiff);
+                leftArm.applyForce(leftDiff.scale(returnForce), leftArm.position);
+                
+                const rightDiff = new CANNON.Vec3();
+                targetRightPos.vsub(rightArm.position, rightDiff);
+                rightArm.applyForce(rightDiff.scale(returnForce), rightArm.position);
+            }
+        }
+        
+        // Keep head stable by applying forces to align with torso
+        const head = this.bodies.head;
+        if (head && this.currentAnimation !== 'knockout') {
+            head.angularVelocity.scale(0.4, head.angularVelocity);
+            head.velocity.scale(0.8, head.velocity);
         }
     }
     
@@ -385,66 +448,80 @@ class HybridCharacter {
         const velocity = torso.velocity;
         const speed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
-        if (speed > 0.5) {
-            // Walking animation
-            this.currentAnimation = 'walking';
-            this.legPhase += deltaTime * 6;
+        if (speed > 0.5 && !this.isKnockedOut) {
+            // Walking animation - realistic foot placement
+            if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
+                this.currentAnimation = 'walking';
+            }
+            this.legPhase += deltaTime * 8; // Slightly faster walking cycle
             
-            const leftLegAngle = Math.sin(this.legPhase) * 0.6;
-            const rightLegAngle = Math.sin(this.legPhase + Math.PI) * 0.6;
+            // More natural leg swing with hip rotation
+            const leftLegSwing = Math.sin(this.legPhase) * 0.5;
+            const rightLegSwing = Math.sin(this.legPhase + Math.PI) * 0.5;
             
             // Position legs relative to torso
             const torsoPos = torso.position;
-            const torsoRot = torso.quaternion;
             
-            // Left upper leg
+            // Calculate foot lift height based on swing phase
+            const leftFootLift = Math.max(0, Math.sin(this.legPhase)) * 0.3;
+            const rightFootLift = Math.max(0, Math.sin(this.legPhase + Math.PI)) * 0.3;
+            
+            // Left upper leg - connected to hip
             this.meshes.leftUpperLeg.position.set(
                 torsoPos.x - 0.2,
                 torsoPos.y - 0.45,
                 torsoPos.z
             );
-            this.meshes.leftUpperLeg.rotation.x = leftLegAngle;
+            this.meshes.leftUpperLeg.rotation.x = leftLegSwing * 0.8;
             
-            // Left lower leg
+            // Left lower leg - bends naturally at knee
+            const leftKneeBend = Math.max(0, -leftLegSwing * 1.2);
             this.meshes.leftLowerLeg.position.set(
                 torsoPos.x - 0.2,
-                torsoPos.y - 1.35,
-                torsoPos.z + Math.max(0, Math.sin(this.legPhase)) * 0.2
-            );
-            this.meshes.leftLowerLeg.rotation.x = Math.max(0, -leftLegAngle);
-            
-            // Left foot
-            this.meshes.leftFoot.position.set(
-                torsoPos.x - 0.2,
-                torsoPos.y - 1.9,
+                torsoPos.y - 1.35 + leftFootLift * 0.3,
                 torsoPos.z + Math.sin(this.legPhase) * 0.15
             );
+            this.meshes.leftLowerLeg.rotation.x = leftKneeBend;
             
-            // Right upper leg
+            // Left foot - stays flat on ground when planted
+            const leftFootZ = Math.sin(this.legPhase) * 0.25;
+            this.meshes.leftFoot.position.set(
+                torsoPos.x - 0.2,
+                torsoPos.y - 2.0 + leftFootLift,
+                torsoPos.z + leftFootZ
+            );
+            this.meshes.leftFoot.rotation.x = leftKneeBend * 0.3; // Slight angle for natural walk
+            
+            // Right upper leg - opposite phase
             this.meshes.rightUpperLeg.position.set(
                 torsoPos.x + 0.2,
                 torsoPos.y - 0.45,
                 torsoPos.z
             );
-            this.meshes.rightUpperLeg.rotation.x = rightLegAngle;
+            this.meshes.rightUpperLeg.rotation.x = rightLegSwing * 0.8;
             
-            // Right lower leg
+            // Right lower leg - bends naturally at knee
+            const rightKneeBend = Math.max(0, -rightLegSwing * 1.2);
             this.meshes.rightLowerLeg.position.set(
                 torsoPos.x + 0.2,
-                torsoPos.y - 1.35,
-                torsoPos.z + Math.max(0, Math.sin(this.legPhase + Math.PI)) * 0.2
-            );
-            this.meshes.rightLowerLeg.rotation.x = Math.max(0, -rightLegAngle);
-            
-            // Right foot
-            this.meshes.rightFoot.position.set(
-                torsoPos.x + 0.2,
-                torsoPos.y - 1.9,
+                torsoPos.y - 1.35 + rightFootLift * 0.3,
                 torsoPos.z + Math.sin(this.legPhase + Math.PI) * 0.15
             );
-        } else {
-            // Idle - legs in neutral position
-            this.currentAnimation = 'idle';
+            this.meshes.rightLowerLeg.rotation.x = rightKneeBend;
+            
+            // Right foot - stays flat on ground when planted
+            const rightFootZ = Math.sin(this.legPhase + Math.PI) * 0.25;
+            this.meshes.rightFoot.position.set(
+                torsoPos.x + 0.2,
+                torsoPos.y - 2.0 + rightFootLift,
+                torsoPos.z + rightFootZ
+            );
+            this.meshes.rightFoot.rotation.x = rightKneeBend * 0.3; // Slight angle for natural walk
+        } else if (!this.isKnockedOut) {
+            // Idle - legs in neutral position with slight breathing motion
+            if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
+                this.currentAnimation = 'idle';
+            }
             const torsoPos = torso.position;
             
             // Smoothly return to neutral
@@ -473,6 +550,55 @@ class HybridCharacter {
                 this.meshes[name].position.copy(body.position);
                 this.meshes[name].quaternion.copy(body.quaternion);
             }
+        }
+        
+        // During knockout, legs also go ragdoll (spread out)
+        if (this.isKnockedOut) {
+            const torsoPos = this.bodies.torso.position;
+            const torsoRot = this.bodies.torso.quaternion;
+            
+            // Spread legs outward in knockout pose
+            this.meshes.leftUpperLeg.position.set(
+                torsoPos.x - 0.3,
+                torsoPos.y - 0.6,
+                torsoPos.z - 0.2
+            );
+            this.meshes.leftUpperLeg.rotation.x = Math.PI * 0.3;
+            this.meshes.leftUpperLeg.rotation.z = -Math.PI * 0.2;
+            
+            this.meshes.leftLowerLeg.position.set(
+                torsoPos.x - 0.4,
+                torsoPos.y - 1.5,
+                torsoPos.z - 0.3
+            );
+            this.meshes.leftLowerLeg.rotation.x = Math.PI * 0.1;
+            
+            this.meshes.leftFoot.position.set(
+                torsoPos.x - 0.5,
+                torsoPos.y - 2.1,
+                torsoPos.z - 0.4
+            );
+            
+            this.meshes.rightUpperLeg.position.set(
+                torsoPos.x + 0.3,
+                torsoPos.y - 0.6,
+                torsoPos.z + 0.2
+            );
+            this.meshes.rightUpperLeg.rotation.x = Math.PI * 0.3;
+            this.meshes.rightUpperLeg.rotation.z = Math.PI * 0.2;
+            
+            this.meshes.rightLowerLeg.position.set(
+                torsoPos.x + 0.4,
+                torsoPos.y - 1.5,
+                torsoPos.z + 0.3
+            );
+            this.meshes.rightLowerLeg.rotation.x = Math.PI * 0.1;
+            
+            this.meshes.rightFoot.position.set(
+                torsoPos.x + 0.5,
+                torsoPos.y - 2.1,
+                torsoPos.z + 0.4
+            );
         }
     }
     
@@ -546,18 +672,40 @@ class HybridCharacter {
         const direction = new CANNON.Vec3();
         this.aiTarget.body.position.vsub(this.body.position, direction);
         direction.y = 0;
+        const distance = direction.length();
         direction.normalize();
         
-        // Apply force to move
-        const moveForce = 180 * this.speed;
+        // Apply horizontal force only to move - no upward force
+        const moveForce = 120 * this.speed; // Reduced force for smoother movement
         this.body.applyForce(
             new CANNON.Vec3(direction.x * moveForce, 0, direction.z * moveForce),
             this.body.position
         );
         
-        // Rotate torso to face target (simple direct rotation)
+        // Limit horizontal velocity to prevent excessive speed
+        const maxSpeed = 4;
+        const horizontalVel = Math.sqrt(this.body.velocity.x ** 2 + this.body.velocity.z ** 2);
+        if (horizontalVel > maxSpeed) {
+            const scale = maxSpeed / horizontalVel;
+            this.body.velocity.x *= scale;
+            this.body.velocity.z *= scale;
+        }
+        
+        // Smoothly rotate torso to face target
         const targetAngle = Math.atan2(direction.x, direction.z);
-        this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), targetAngle);
+        const currentAngle = Math.atan2(
+            2 * (this.body.quaternion.w * this.body.quaternion.y + this.body.quaternion.x * this.body.quaternion.z),
+            1 - 2 * (this.body.quaternion.y ** 2 + this.body.quaternion.z ** 2)
+        );
+        
+        // Interpolate rotation for smooth turning
+        let angleDiff = targetAngle - currentAngle;
+        // Normalize angle difference to [-PI, PI]
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+        
+        const newAngle = currentAngle + angleDiff * 0.15; // Smooth interpolation
+        this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), newAngle);
     }
     
     executeAttack() {
@@ -595,7 +743,7 @@ class HybridCharacter {
         if (distance < 3 && !this.isGrabbing) {
             this.grab(this.aiTarget);
         } else if (this.isGrabbing && this.grabbedTarget) {
-            // Move towards edge
+            // Move towards edge smoothly
             const edgeX = this.body.position.x > 0 ? 15 : -15;
             const edgeZ = this.body.position.z > 0 ? 15 : -15;
             
@@ -606,11 +754,39 @@ class HybridCharacter {
             );
             direction.normalize();
             
-            const moveForce = 80;
+            const moveForce = 60; // Reduced force for carrying
             this.body.applyForce(
                 new CANNON.Vec3(direction.x * moveForce, 0, direction.z * moveForce),
                 this.body.position
             );
+            
+            // Limit velocity while carrying
+            const maxSpeed = 2.5;
+            const horizontalVel = Math.sqrt(this.body.velocity.x ** 2 + this.body.velocity.z ** 2);
+            if (horizontalVel > maxSpeed) {
+                const scale = maxSpeed / horizontalVel;
+                this.body.velocity.x *= scale;
+                this.body.velocity.z *= scale;
+            }
+            
+            // Keep grabbed character close
+            const grabOffset = new CANNON.Vec3(-direction.x * 1.2, 0.5, -direction.z * 1.2);
+            const targetPos = new CANNON.Vec3(
+                this.body.position.x + grabOffset.x,
+                this.body.position.y + grabOffset.y,
+                this.body.position.z + grabOffset.z
+            );
+            
+            const pullDirection = new CANNON.Vec3();
+            targetPos.vsub(this.grabbedTarget.body.position, pullDirection);
+            const pullForce = 150;
+            this.grabbedTarget.body.applyForce(
+                pullDirection.scale(pullForce),
+                this.grabbedTarget.body.position
+            );
+            
+            // Dampen grabbed target's velocity
+            this.grabbedTarget.body.velocity.scale(0.8, this.grabbedTarget.body.velocity);
             
             // Check if at edge
             const distFromCenter = Math.sqrt(
@@ -638,39 +814,73 @@ class HybridCharacter {
     
     punch() {
         this.currentAnimation = 'punching';
-        this.punchTimer = 9; // ~150ms at 60fps
+        this.punchTimer = 15; // ~250ms at 60fps for more realistic wind-up
         
-        // Apply strong force to right hand for punching
+        // Boxing-style punch with wind-up
         const hand = this.bodies.rightHand;
+        const forearm = this.bodies.rightForearm;
+        const upperArm = this.bodies.rightUpperArm;
+        
+        // Get direction character is facing
         const direction = new CANNON.Vec3(0, 0, 1);
         this.body.quaternion.vmult(direction, direction);
         
-        const punchForce = 600 * this.strength;
-        hand.applyForce(
-            new CANNON.Vec3(direction.x * punchForce, 100, direction.z * punchForce),
-            hand.position
-        );
+        // Wind-up phase - pull arm back first (frames 0-5)
+        if (this.punchTimer > 10) {
+            const pullBackForce = 200;
+            hand.applyForce(
+                new CANNON.Vec3(-direction.x * pullBackForce, 0, -direction.z * pullBackForce),
+                hand.position
+            );
+        } else {
+            // Punch extension phase - explosive forward motion (frames 6-15)
+            const punchForce = 800 * this.strength;
+            hand.applyForce(
+                new CANNON.Vec3(direction.x * punchForce, 50, direction.z * punchForce),
+                hand.position
+            );
+            forearm.applyForce(
+                new CANNON.Vec3(direction.x * punchForce * 0.6, 0, direction.z * punchForce * 0.6),
+                forearm.position
+            );
+        }
         
-        // Store position for hit check
+        // Add body rotation for power
+        this.body.angularVelocity.y += 0.3;
+        
+        // Store position for hit check (at peak extension)
         this.punchHitPos = hand.position.clone();
     }
     
     dropkick() {
         this.currentAnimation = 'kicking';
-        this.kickTimer = 12; // ~200ms at 60fps
+        this.kickTimer = 20; // ~333ms at 60fps for full dropkick animation
         
-        // Jump
-        this.body.applyForce(new CANNON.Vec3(0, 400, 0), this.body.position);
+        // Dropkick has three phases: jump, extend, recovery
+        const phase = this.kickTimer;
         
-        // Forward momentum
+        // Get direction character is facing
         const direction = new CANNON.Vec3(0, 0, 1);
         this.body.quaternion.vmult(direction, direction);
         
-        const kickForce = 200;
-        this.body.applyForce(
-            new CANNON.Vec3(direction.x * kickForce, 0, direction.z * kickForce),
-            this.body.position
-        );
+        if (phase > 15) {
+            // Phase 1: Jump up (frames 0-5)
+            const jumpForce = 600 * this.strength;
+            this.body.applyForce(new CANNON.Vec3(0, jumpForce, 0), this.body.position);
+        } else if (phase > 10) {
+            // Phase 2: Extend legs and lunge forward (frames 6-10)
+            const kickForce = 400 * this.strength;
+            this.body.applyForce(
+                new CANNON.Vec3(direction.x * kickForce, 100, direction.z * kickForce),
+                this.body.position
+            );
+            
+            // Rotate body horizontally for flying kick pose
+            this.body.angularVelocity.x = -2;
+        } else {
+            // Phase 3: Follow-through (frames 11-20)
+            // Let physics take over for natural landing
+        }
         
         // Store direction for hit check
         this.kickDirection = direction.clone();
@@ -692,20 +902,30 @@ class HybridCharacter {
     takeDamage(amount, sourcePos) {
         this.health -= amount;
         
-        // Apply knockback
+        // Apply knockback based on damage type
         const direction = new CANNON.Vec3();
         this.body.position.vsub(sourcePos, direction);
+        direction.y = 0; // Horizontal direction
         direction.normalize();
         
-        const knockbackForce = 400 * (amount / 20) * this.strength;
+        // More realistic knockback - horizontal push with slight upward component
+        const knockbackStrength = amount / 20; // Normalized (1.0 for punch, 1.75 for kick)
+        const horizontalForce = 500 * knockbackStrength * this.strength;
+        const upwardForce = 200 * knockbackStrength;
+        
         this.body.applyImpulse(
             new CANNON.Vec3(
-                direction.x * knockbackForce,
-                knockbackForce * 0.4,
-                direction.z * knockbackForce
+                direction.x * horizontalForce,
+                upwardForce,
+                direction.z * horizontalForce
             ),
             this.body.position
         );
+        
+        // Add slight rotation from impact
+        const spinForce = knockbackStrength * 2;
+        this.body.angularVelocity.x += (Math.random() - 0.5) * spinForce;
+        this.body.angularVelocity.z += (Math.random() - 0.5) * spinForce;
         
         if (this.health <= 0 && !this.isKnockedOut) {
             this.knockout();
@@ -714,21 +934,36 @@ class HybridCharacter {
     
     knockout() {
         this.isKnockedOut = true;
-        this.knockoutTimer = 180 + Math.random() * 120;
+        this.knockoutTimer = 180 + Math.random() * 120; // 3-5 seconds
         this.wakeupProgress = 0;
         this.health = 0;
         this.currentAnimation = 'knockout';
         
-        // Stop balancing - let physics take over completely
-        // Arms and head go fully ragdoll
+        // Dramatic knockout - disable balancing forces
+        // Apply dramatic spinning fall
+        const spinDirection = Math.random() > 0.5 ? 1 : -1;
+        this.body.angularVelocity.set(
+            (Math.random() - 0.5) * 4,
+            spinDirection * 2,
+            (Math.random() - 0.5) * 4
+        );
         
-        // Visual feedback
+        // Remove most of the physics constraints temporarily to allow full ragdoll
+        // (They stay in array but we won't apply balancing forces)
+        
+        // Visual feedback - semi-transparent and darker
         Object.values(this.meshes).forEach(mesh => {
-            if (mesh.material && mesh.material.opacity !== undefined) {
+            if (mesh.material) {
                 mesh.material.transparent = true;
                 mesh.material.opacity = 0.7;
+                // Darken the material slightly
+                if (mesh.material.emissive) {
+                    mesh.material.emissive.setHex(0x000000);
+                }
             }
         });
+        
+        // Add "stars" or dizziness effect could be added here
     }
     
     wakeUp() {
@@ -738,28 +973,50 @@ class HybridCharacter {
         this.wakeupProgress = 0;
         this.currentAnimation = 'idle';
         
-        // Restore opacity
+        // Restore opacity and color
         Object.values(this.meshes).forEach(mesh => {
-            if (mesh.material && mesh.material.opacity !== undefined) {
+            if (mesh.material) {
                 mesh.material.transparent = false;
                 mesh.material.opacity = 1.0;
             }
         });
         
-        // Resume balancing
-        // Break free if grabbed
+        // Resume balancing - reset angular velocity
+        this.body.angularVelocity.set(0, 0, 0);
+        
+        // Break free if grabbed with explosive force
         if (this.isGrabbed) {
             const grabber = this.game.characters.find(c => c.grabbedTarget === this);
             if (grabber) {
                 grabber.releaseGrab();
+                
+                // Push grabber away
+                const pushDirection = new CANNON.Vec3();
+                grabber.body.position.vsub(this.body.position, pushDirection);
+                pushDirection.normalize();
+                grabber.body.applyImpulse(
+                    new CANNON.Vec3(
+                        pushDirection.x * 300,
+                        150,
+                        pushDirection.z * 300
+                    ),
+                    grabber.body.position
+                );
             }
             
+            // Launch self away from grabber
             this.body.applyImpulse(
                 new CANNON.Vec3(
-                    (Math.random() - 0.5) * 500,
-                    400,
-                    (Math.random() - 0.5) * 500
+                    (Math.random() - 0.5) * 600,
+                    500,
+                    (Math.random() - 0.5) * 600
                 ),
+                this.body.position
+            );
+        } else {
+            // Normal wake-up - small jump to recover
+            this.body.applyImpulse(
+                new CANNON.Vec3(0, 200, 0),
                 this.body.position
             );
         }
@@ -782,13 +1039,28 @@ class HybridCharacter {
     throwGrabbed() {
         if (!this.grabbedTarget) return;
         
+        // Calculate throw direction (away from center and outward)
         const direction = new CANNON.Vec3();
         this.grabbedTarget.body.position.vsub(this.body.position, direction);
+        direction.y = 0; // Horizontal direction only
         direction.normalize();
         
+        // Powerful throw with upward arc for dramatic effect
+        const throwStrength = 1200 * this.strength;
         this.grabbedTarget.body.applyImpulse(
-            new CANNON.Vec3(direction.x * 1000, -300, direction.z * 1000),
+            new CANNON.Vec3(
+                direction.x * throwStrength,
+                -400, // Downward force to ensure they go off platform
+                direction.z * throwStrength
+            ),
             this.grabbedTarget.body.position
+        );
+        
+        // Add spin for more dramatic effect
+        this.grabbedTarget.body.angularVelocity.set(
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10
         );
         
         this.releaseGrab();

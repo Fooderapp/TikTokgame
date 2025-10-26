@@ -60,11 +60,11 @@ class Game {
     setupPhysics() {
         // Cannon.js physics world
         this.world = new CANNON.World();
-        this.world.gravity.set(0, -20, 0); // Reduced gravity for more realistic, slower fall
+        this.world.gravity.set(0, -25, 0); // Stronger gravity for better ground contact
         this.world.broadphase = new CANNON.NaiveBroadphase();
-        this.world.solver.iterations = 15; // More iterations for better spring physics
-        this.world.defaultContactMaterial.friction = 0.4; // Higher friction for less sliding
-        this.world.defaultContactMaterial.restitution = 0.1; // Low bounce for realistic impact
+        this.world.solver.iterations = 20; // More iterations for stable physics
+        this.world.defaultContactMaterial.friction = 0.8; // High friction to prevent sliding
+        this.world.defaultContactMaterial.restitution = 0.05; // Very low bounce for stability
     }
     
     createArena() {
