@@ -429,8 +429,8 @@ class Character {
         
         // Physics-based limb and head simulation with springs
         this.armPhysics = {
-            left: { velocity: new CANNON.Vec3(0, 0, 0), angularVelocity: new THREE.Vector3(0, 0, 0) },
-            right: { velocity: new CANNON.Vec3(0, 0, 0), angularVelocity: new THREE.Vector3(0, 0, 0) }
+            left: { velocity: new CANNON.Vec3(0, 0, 0), angularVelocity: new CANNON.Vec3(0, 0, 0) },
+            right: { velocity: new CANNON.Vec3(0, 0, 0), angularVelocity: new CANNON.Vec3(0, 0, 0) }
         };
         this.legPhysics = {
             left: { position: new THREE.Vector3(-0.5, -1.5, 0), velocity: new THREE.Vector3(0, 0, 0) },
@@ -444,6 +444,15 @@ class Character {
         this.spinePhysics = {
             bend: 0,
             bendVelocity: 0
+        };
+        
+        // Spring physics constants for realistic movement
+        this.springConstants = {
+            head: { strength: 0.15, damping: 0.85, rotSpring: 0.08, rotDamping: 0.9 },
+            spine: { strength: 0.12, damping: 0.88 },
+            leg: { strength: 0.18, damping: 0.82 },
+            arm: { strength: 0.2, damping: 0.8 },
+            headReaction: 0.5 // Impact reaction multiplier
         };
         
         // Add head - MUCH BIGGER for comedic effect (like Party Animals)
@@ -529,23 +538,19 @@ class Character {
     
     updateSpringPhysics() {
         // Spring physics for head - bouncy, spring-like movement
-        const headSpringStrength = 0.15;
-        const headDamping = 0.85;
         const targetHeadY = 2.0;
         
         // Apply spring force to head
         const headDisplacement = targetHeadY - this.headPhysics.position.y;
-        this.headPhysics.velocity.y += headDisplacement * headSpringStrength;
-        this.headPhysics.velocity.multiplyScalar(headDamping);
+        this.headPhysics.velocity.y += headDisplacement * this.springConstants.head.strength;
+        this.headPhysics.velocity.multiplyScalar(this.springConstants.head.damping);
         this.headPhysics.position.y += this.headPhysics.velocity.y;
         
         // Head rotation spring (wobble)
-        const headRotSpring = 0.08;
-        const headRotDamping = 0.9;
-        this.headPhysics.velocity.x += -this.headPhysics.rotation.x * headRotSpring;
-        this.headPhysics.velocity.z += -this.headPhysics.rotation.z * headRotSpring;
-        this.headPhysics.velocity.x *= headRotDamping;
-        this.headPhysics.velocity.z *= headRotDamping;
+        this.headPhysics.velocity.x += -this.headPhysics.rotation.x * this.springConstants.head.rotSpring;
+        this.headPhysics.velocity.z += -this.headPhysics.rotation.z * this.springConstants.head.rotSpring;
+        this.headPhysics.velocity.x *= this.springConstants.head.rotDamping;
+        this.headPhysics.velocity.z *= this.springConstants.head.rotDamping;
         this.headPhysics.rotation.x += this.headPhysics.velocity.x;
         this.headPhysics.rotation.z += this.headPhysics.velocity.z;
         
@@ -557,16 +562,12 @@ class Character {
         }
         
         // Jelly-like spine physics
-        const spineSpringStrength = 0.12;
-        const spineDamping = 0.88;
-        
-        // Spine bends based on movement
         const velocity = this.body.velocity;
         const targetBend = velocity.x * 0.02; // Bend based on horizontal movement
         
         const spineDisplacement = targetBend - this.spinePhysics.bend;
-        this.spinePhysics.bendVelocity += spineDisplacement * spineSpringStrength;
-        this.spinePhysics.bendVelocity *= spineDamping;
+        this.spinePhysics.bendVelocity += spineDisplacement * this.springConstants.spine.strength;
+        this.spinePhysics.bendVelocity *= this.springConstants.spine.damping;
         this.spinePhysics.bend += this.spinePhysics.bendVelocity;
         
         // Apply spine bend to mesh
@@ -575,9 +576,6 @@ class Character {
         }
         
         // Jelly-like leg physics with spring simulation
-        const legSpringStrength = 0.18;
-        const legDamping = 0.82;
-        
         ['left', 'right'].forEach(side => {
             const targetPos = new THREE.Vector3(
                 side === 'left' ? -0.5 : 0.5,
@@ -587,16 +585,12 @@ class Character {
             
             // Spring force towards target position
             const displacement = new THREE.Vector3().subVectors(targetPos, this.legPhysics[side].position);
-            this.legPhysics[side].velocity.addScaledVector(displacement, legSpringStrength);
-            this.legPhysics[side].velocity.multiplyScalar(legDamping);
+            this.legPhysics[side].velocity.addScaledVector(displacement, this.springConstants.leg.strength);
+            this.legPhysics[side].velocity.multiplyScalar(this.springConstants.leg.damping);
             this.legPhysics[side].position.add(this.legPhysics[side].velocity);
         });
         
         // Physics-based arm simulation
-        const armSpringStrength = 0.2;
-        const armDamping = 0.8;
-        
-        // Arms have physics-based movement with spring constraints
         ['left', 'right'].forEach(side => {
             const arm = side === 'left' ? this.leftArm : this.rightArm;
             if (!arm || this.isGrabbing) return;
@@ -605,8 +599,8 @@ class Character {
             
             // Spring force on arm rotation
             const rotDisplacement = targetRotZ - arm.rotation.z;
-            this.armPhysics[side].angularVelocity.z += rotDisplacement * armSpringStrength;
-            this.armPhysics[side].angularVelocity.z *= armDamping;
+            this.armPhysics[side].angularVelocity.z += rotDisplacement * this.springConstants.arm.strength;
+            this.armPhysics[side].angularVelocity.z *= this.springConstants.arm.damping;
             
             // Apply angular velocity
             arm.rotation.z += this.armPhysics[side].angularVelocity.z;
@@ -1261,8 +1255,8 @@ class Character {
         
         // Add spring reaction to head physics
         if (this.headPhysics) {
-            this.headPhysics.velocity.x += hitDirection.x * 0.5;
-            this.headPhysics.velocity.z += hitDirection.z * 0.5;
+            this.headPhysics.velocity.x += hitDirection.x * this.springConstants.headReaction;
+            this.headPhysics.velocity.z += hitDirection.z * this.springConstants.headReaction;
         }
     }
     
