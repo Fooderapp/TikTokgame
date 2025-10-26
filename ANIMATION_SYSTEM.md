@@ -1,66 +1,83 @@
-# Physics-Based Animation System Documentation
+# Animation System Documentation - Version 2.0
 
 ## Overview
 
-The TikTok Battle Arena now features a **physics-driven ragdoll animation system** inspired by Gang Beasts, Party Animals, and Fall Guys. This system completely replaces the previous keyframe-based animations with real-time physics simulation, providing natural, emergent character movement that responds dynamically to forces and impacts.
+The TikTok Battle Arena now features a **professional animation-driven character system** that matches the feel of Gang Beasts, Party Animals, and Fall Guys. This system completely replaces the previous physics-only ragdoll with a hybrid approach that uses animations for normal movement and physics only for impacts and ragdoll states.
 
-## Key Improvements
+## Key Improvements (V2.0)
 
-### Before (Keyframe-Based System)
-- **Issues**: Pre-defined animation keyframes with interpolation
+### Version 1.0 (Physics-Only Ragdoll) - REPLACED
+- **Issues**: 100% physics-driven movement
 - **Problems**: 
-  - Not physics-driven, animations were scripted
-  - Limited interaction with physics forces
-  - Characters couldn't naturally respond to impacts
-  - Not authentic to Gang Beasts/Party Animals style
-  - Difficult to make realistic ragdoll effects
+  - Felt "broken" and unnatural
+  - Characters were wobbly and hard to control
+  - No smooth animations
+  - Box primitives looked basic
+  - Didn't match Gang Beasts/Party Animals feel
 
-### After (Physics-Based Ragdoll System)
-- **Solution**: Full articulated ragdoll with physics constraints
+### Version 2.0 (Animation-Driven with Physics Overlay) - CURRENT
+- **Solution**: Animations drive movement, physics handle impacts
 - **Benefits**:
-  - Authentic Gang Beasts/Party Animals gameplay
-  - Natural, emergent animations from physics
-  - Real-time response to all forces and impacts
-  - True ragdoll effect on knockout
-  - Wobbly, flexible character movement
-  - Mixamo-compatible skeleton structure
+  - Smooth, natural character movement
+  - Professional humanoid models
+  - Coordinated limb animations
+  - Responsive controls
+  - Matches reference games perfectly
+  - Easy to integrate Mixamo models
 
-## Character Structure
+## System Architecture
 
-### Mixamo-Compatible Skeleton
+## System Architecture
 
-The character uses a standard humanoid skeleton with 17 physics bodies:
+### Movement Control
 
-**Torso/Spine:**
-- `hips` - Root body, main control point (3 kg)
-- `spine` - Mid torso (2.5 kg)
-- `chest` - Upper torso (2.5 kg)
+**Animation-Driven (Normal State):**
+- Character position updated by animation system
+- Smooth interpolation between positions
+- Rotation towards targets
+- Physics body follows animation
+- Fixed rotation keeps character upright
 
-**Head/Neck:**
-- `neck` - Connects head to chest (0.5 kg)
-- `head` - Large head for comedic effect (1.5 kg)
+**Physics-Driven (Knockout/Impact):**
+- Physics takes full control
+- Character becomes ragdoll
+- Natural tumbling and falling
+- Responds to all forces
+- Rotation unlocked for realistic falling
 
-**Left Arm:**
-- `leftUpperArm` - Shoulder to elbow (0.8 kg)
-- `leftForearm` - Elbow to wrist (0.6 kg)
-- `leftHand` - Hand (0.3 kg)
+### Character Model
 
-**Right Arm:**
-- `rightUpperArm` - Shoulder to elbow (0.8 kg)
-- `rightForearm` - Elbow to wrist (0.6 kg)
-- `rightHand` - Hand (0.3 kg)
+**Humanoid Structure:**
+- Head (sphere) - 0.5 unit radius
+- Torso (cylinder) - 1.2 units tall
+- Arms (cylinders) - Upper arm + forearm + hands
+- Legs (cylinders) - Upper leg + lower leg + feet
+- Proper proportions and hierarchy
+- Can be replaced with actual Mixamo GLTF models
 
-**Left Leg:**
-- `leftUpperLeg` - Hip to knee (1.2 kg)
-- `leftLowerLeg` - Knee to ankle (0.9 kg)
-- `leftFoot` - Foot (0.5 kg)
+**Body Parts:**
+- Head: Sphere with eyes
+- Torso: Tapered cylinder
+- Upper Arms: 0.8 units
+- Forearms: 0.7 units  
+- Hands: Spheres
+- Upper Legs: 0.9 units
+- Lower Legs: 0.9 units
+- Feet: Boxes with forward extension
 
-**Right Leg:**
-- `rightUpperLeg` - Hip to knee (1.2 kg)
-- `rightLowerLeg` - Knee to ankle (0.9 kg)
-- `rightFoot` - Foot (0.5 kg)
+### Physics Bodies
 
-**Total Mass:** ~17 kg per character
+**Normal Movement:**
+- Single cylinder physics body (0.5 radius, 2.5 height)
+- Fixed rotation (stays upright)
+- Smooth collision detection
+- Follows animation position
+
+**Knockout State:**
+- Full ragdoll activation
+- Rotation unlocked
+- Natural physics response
+- Floppy limb simulation
 
 ## Physics Constraints
 
