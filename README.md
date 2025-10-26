@@ -85,17 +85,26 @@ Characters have three main states:
 
 ### Physics Features
 - Realistic ragdoll physics with connected body parts
-- Strong gravity for dramatic falls
+- Strong gravity for proper ground contact
 - Platform edge detection
-- Momentum-based combat
-- Smooth keyframe-based animations (see ANIMATION_SYSTEM.md)
+- Momentum-based combat with realistic knockback
+- Stable character movement - no jumping or bouncing
+- Head stabilization with dual constraints
+- Arm stability with rest position forces
+- Smooth walking with velocity limiting
+- Enhanced knockout with dramatic falls
+- Powerful grab and throw mechanics
 
 ### Animation System
 - **Keyframe-Based**: Smooth interpolation between animation states
 - **State Management**: Idle, walk, punch, kick, knockout animations
+- **Walking**: Proper foot placement with lift/plant phases, knee bending, natural stride
+- **Punch (Boxing)**: Wind-up phase (pull back) → Extension phase (explosive forward) → Follow-through
+- **Dropkick**: Three-phase animation (jump → extend legs/lunge → landing)
+- **Knockout**: Dramatic spinning fall with full ragdoll physics
 - **Blending**: Seamless transitions between animation states
-- **Secondary Motion**: Breathing, blinking, physics-based head movement
-- **No Jittering**: Replaced old procedural system with professional animation framework
+- **Secondary Motion**: Physics-based head stability, arm rest positions
+- **No Jittering**: Characters walk smoothly on platform without jumping or bouncing
 
 ## Customization
 

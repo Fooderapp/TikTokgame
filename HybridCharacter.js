@@ -551,6 +551,55 @@ class HybridCharacter {
                 this.meshes[name].quaternion.copy(body.quaternion);
             }
         }
+        
+        // During knockout, legs also go ragdoll (spread out)
+        if (this.isKnockedOut) {
+            const torsoPos = this.bodies.torso.position;
+            const torsoRot = this.bodies.torso.quaternion;
+            
+            // Spread legs outward in knockout pose
+            this.meshes.leftUpperLeg.position.set(
+                torsoPos.x - 0.3,
+                torsoPos.y - 0.6,
+                torsoPos.z - 0.2
+            );
+            this.meshes.leftUpperLeg.rotation.x = Math.PI * 0.3;
+            this.meshes.leftUpperLeg.rotation.z = -Math.PI * 0.2;
+            
+            this.meshes.leftLowerLeg.position.set(
+                torsoPos.x - 0.4,
+                torsoPos.y - 1.5,
+                torsoPos.z - 0.3
+            );
+            this.meshes.leftLowerLeg.rotation.x = Math.PI * 0.1;
+            
+            this.meshes.leftFoot.position.set(
+                torsoPos.x - 0.5,
+                torsoPos.y - 2.1,
+                torsoPos.z - 0.4
+            );
+            
+            this.meshes.rightUpperLeg.position.set(
+                torsoPos.x + 0.3,
+                torsoPos.y - 0.6,
+                torsoPos.z + 0.2
+            );
+            this.meshes.rightUpperLeg.rotation.x = Math.PI * 0.3;
+            this.meshes.rightUpperLeg.rotation.z = Math.PI * 0.2;
+            
+            this.meshes.rightLowerLeg.position.set(
+                torsoPos.x + 0.4,
+                torsoPos.y - 1.5,
+                torsoPos.z + 0.3
+            );
+            this.meshes.rightLowerLeg.rotation.x = Math.PI * 0.1;
+            
+            this.meshes.rightFoot.position.set(
+                torsoPos.x + 0.5,
+                torsoPos.y - 2.1,
+                torsoPos.z + 0.4
+            );
+        }
     }
     
     updateAI(deltaTime) {
@@ -853,20 +902,30 @@ class HybridCharacter {
     takeDamage(amount, sourcePos) {
         this.health -= amount;
         
-        // Apply knockback
+        // Apply knockback based on damage type
         const direction = new CANNON.Vec3();
         this.body.position.vsub(sourcePos, direction);
+        direction.y = 0; // Horizontal direction
         direction.normalize();
         
-        const knockbackForce = 400 * (amount / 20) * this.strength;
+        // More realistic knockback - horizontal push with slight upward component
+        const knockbackStrength = amount / 20; // Normalized (1.0 for punch, 1.75 for kick)
+        const horizontalForce = 500 * knockbackStrength * this.strength;
+        const upwardForce = 200 * knockbackStrength;
+        
         this.body.applyImpulse(
             new CANNON.Vec3(
-                direction.x * knockbackForce,
-                knockbackForce * 0.4,
-                direction.z * knockbackForce
+                direction.x * horizontalForce,
+                upwardForce,
+                direction.z * horizontalForce
             ),
             this.body.position
         );
+        
+        // Add slight rotation from impact
+        const spinForce = knockbackStrength * 2;
+        this.body.angularVelocity.x += (Math.random() - 0.5) * spinForce;
+        this.body.angularVelocity.z += (Math.random() - 0.5) * spinForce;
         
         if (this.health <= 0 && !this.isKnockedOut) {
             this.knockout();
@@ -875,21 +934,36 @@ class HybridCharacter {
     
     knockout() {
         this.isKnockedOut = true;
-        this.knockoutTimer = 180 + Math.random() * 120;
+        this.knockoutTimer = 180 + Math.random() * 120; // 3-5 seconds
         this.wakeupProgress = 0;
         this.health = 0;
         this.currentAnimation = 'knockout';
         
-        // Stop balancing - let physics take over completely
-        // Arms and head go fully ragdoll
+        // Dramatic knockout - disable balancing forces
+        // Apply dramatic spinning fall
+        const spinDirection = Math.random() > 0.5 ? 1 : -1;
+        this.body.angularVelocity.set(
+            (Math.random() - 0.5) * 4,
+            spinDirection * 2,
+            (Math.random() - 0.5) * 4
+        );
         
-        // Visual feedback
+        // Remove most of the physics constraints temporarily to allow full ragdoll
+        // (They stay in array but we won't apply balancing forces)
+        
+        // Visual feedback - semi-transparent and darker
         Object.values(this.meshes).forEach(mesh => {
-            if (mesh.material && mesh.material.opacity !== undefined) {
+            if (mesh.material) {
                 mesh.material.transparent = true;
                 mesh.material.opacity = 0.7;
+                // Darken the material slightly
+                if (mesh.material.emissive) {
+                    mesh.material.emissive.setHex(0x000000);
+                }
             }
         });
+        
+        // Add "stars" or dizziness effect could be added here
     }
     
     wakeUp() {
@@ -899,28 +973,50 @@ class HybridCharacter {
         this.wakeupProgress = 0;
         this.currentAnimation = 'idle';
         
-        // Restore opacity
+        // Restore opacity and color
         Object.values(this.meshes).forEach(mesh => {
-            if (mesh.material && mesh.material.opacity !== undefined) {
+            if (mesh.material) {
                 mesh.material.transparent = false;
                 mesh.material.opacity = 1.0;
             }
         });
         
-        // Resume balancing
-        // Break free if grabbed
+        // Resume balancing - reset angular velocity
+        this.body.angularVelocity.set(0, 0, 0);
+        
+        // Break free if grabbed with explosive force
         if (this.isGrabbed) {
             const grabber = this.game.characters.find(c => c.grabbedTarget === this);
             if (grabber) {
                 grabber.releaseGrab();
+                
+                // Push grabber away
+                const pushDirection = new CANNON.Vec3();
+                grabber.body.position.vsub(this.body.position, pushDirection);
+                pushDirection.normalize();
+                grabber.body.applyImpulse(
+                    new CANNON.Vec3(
+                        pushDirection.x * 300,
+                        150,
+                        pushDirection.z * 300
+                    ),
+                    grabber.body.position
+                );
             }
             
+            // Launch self away from grabber
             this.body.applyImpulse(
                 new CANNON.Vec3(
-                    (Math.random() - 0.5) * 500,
-                    400,
-                    (Math.random() - 0.5) * 500
+                    (Math.random() - 0.5) * 600,
+                    500,
+                    (Math.random() - 0.5) * 600
                 ),
+                this.body.position
+            );
+        } else {
+            // Normal wake-up - small jump to recover
+            this.body.applyImpulse(
+                new CANNON.Vec3(0, 200, 0),
                 this.body.position
             );
         }
@@ -943,13 +1039,28 @@ class HybridCharacter {
     throwGrabbed() {
         if (!this.grabbedTarget) return;
         
+        // Calculate throw direction (away from center and outward)
         const direction = new CANNON.Vec3();
         this.grabbedTarget.body.position.vsub(this.body.position, direction);
+        direction.y = 0; // Horizontal direction only
         direction.normalize();
         
+        // Powerful throw with upward arc for dramatic effect
+        const throwStrength = 1200 * this.strength;
         this.grabbedTarget.body.applyImpulse(
-            new CANNON.Vec3(direction.x * 1000, -300, direction.z * 1000),
+            new CANNON.Vec3(
+                direction.x * throwStrength,
+                -400, // Downward force to ensure they go off platform
+                direction.z * throwStrength
+            ),
             this.grabbedTarget.body.position
+        );
+        
+        // Add spin for more dramatic effect
+        this.grabbedTarget.body.angularVelocity.set(
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10
         );
         
         this.releaseGrab();
