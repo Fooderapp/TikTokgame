@@ -174,11 +174,17 @@ A 3D physics-based fighting game inspired by Party Animals and Gang Beasts, feat
 - Platform: Brown (#8B4513) with white edge lines
 - Power boost: Gold emissive glow
 
-#### Animations
-- Walking: Procedural leg/arm swinging based on velocity
-- Punch: Quick arm extension
-- Dropkick: Leg extension with jump
-- Knocked out: Ragdoll physics only
+#### Animations (New Keyframe System)
+- **Idle**: Breathing, subtle arm movement, head looking around, blinking
+- **Walk**: Coordinated arm swings, leg lifts, head bobbing (0.6s cycle)
+- **Punch**: Wind-up, extension, follow-through (0.5s)
+- **Kick/Dropkick**: Full leg extension with jump motion (0.6s)
+- **Knockout**: Dramatic limb spread, lolling head, visible unconscious state (1.5s loop)
+- **Smooth Interpolation**: Ease-in-out curves for natural motion
+- **State Blending**: Seamless transitions between animation states
+- **Secondary Motion**: Physics-based head lean, random blinking, breathing
+
+See `ANIMATION_SYSTEM.md` for detailed documentation.
 
 ### 10. Technical Specifications
 

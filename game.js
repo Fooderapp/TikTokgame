@@ -376,7 +376,17 @@ class Character {
         this.strength = 1.0;
         this.speed = 1.0;
         
+        // Animation system
+        this.mixer = null;
+        this.animations = {};
+        this.currentAnimation = null;
+        this.animationState = 'idle';
+        this.animationTime = 0;
+        this.animationBlend = 0;
+        this.targetAnimationState = 'idle';
+        
         this.createBody();
+        this.setupAnimations();
         this.setupAI();
     }
     
@@ -533,78 +543,163 @@ class Character {
         this.rightFoot = new THREE.Mesh(footGeometry, footMaterial);
         this.rightFoot.position.set(0, -0.7, 0.15);
         this.rightLeg.add(this.rightFoot);
+        
+        // Store initial rotations for animation
+        this.initialRotations = {
+            leftArm: { x: 0, y: 0, z: Math.PI / 4 },
+            rightArm: { x: 0, y: 0, z: -Math.PI / 4 },
+            leftLeg: { x: 0, y: 0, z: 0 },
+            rightLeg: { x: 0, y: 0, z: 0 },
+            head: { x: 0, y: 0, z: 0 }
+        };
+        
+        // Animation target rotations (for smooth interpolation)
+        this.targetRotations = {
+            leftArm: { x: 0, y: 0, z: Math.PI / 4 },
+            rightArm: { x: 0, y: 0, z: -Math.PI / 4 },
+            leftLeg: { x: 0, y: 0, z: 0 },
+            rightLeg: { x: 0, y: 0, z: 0 },
+            head: { x: 0, y: 0, z: 0 }
+        };
+        
+        // Animation target positions
+        this.targetPositions = {
+            leftArm: { x: -1.1, y: 0.5, z: 0 },
+            rightArm: { x: 1.1, y: 0.5, z: 0 },
+            leftLeg: { x: -0.5, y: -1.5, z: 0 },
+            rightLeg: { x: 0.5, y: -1.5, z: 0 },
+            head: { x: 0, y: 2.0, z: 0 }
+        };
     }
     
-    
-    updateSpringPhysics() {
-        // Spring physics for head - bouncy, spring-like movement
-        const targetHeadY = 2.0;
-        
-        // Apply spring force to head
-        const headDisplacement = targetHeadY - this.headPhysics.position.y;
-        this.headPhysics.velocity.y += headDisplacement * this.springConstants.head.strength;
-        this.headPhysics.velocity.multiplyScalar(this.springConstants.head.damping);
-        this.headPhysics.position.y += this.headPhysics.velocity.y;
-        
-        // Head rotation spring (wobble)
-        this.headPhysics.velocity.x += -this.headPhysics.rotation.x * this.springConstants.head.rotSpring;
-        this.headPhysics.velocity.z += -this.headPhysics.rotation.z * this.springConstants.head.rotSpring;
-        this.headPhysics.velocity.x *= this.springConstants.head.rotDamping;
-        this.headPhysics.velocity.z *= this.springConstants.head.rotDamping;
-        this.headPhysics.rotation.x += this.headPhysics.velocity.x;
-        this.headPhysics.rotation.z += this.headPhysics.velocity.z;
-        
-        // Apply head physics to visual mesh
-        if (this.head) {
-            this.head.position.y = this.headPhysics.position.y;
-            this.head.rotation.x = this.headPhysics.rotation.x;
-            this.head.rotation.z = this.headPhysics.rotation.z;
-        }
-        
-        // Jelly-like spine physics
-        const velocity = this.body.velocity;
-        const targetBend = velocity.x * 0.02; // Bend based on horizontal movement
-        
-        const spineDisplacement = targetBend - this.spinePhysics.bend;
-        this.spinePhysics.bendVelocity += spineDisplacement * this.springConstants.spine.strength;
-        this.spinePhysics.bendVelocity *= this.springConstants.spine.damping;
-        this.spinePhysics.bend += this.spinePhysics.bendVelocity;
-        
-        // Apply spine bend to mesh
-        if (this.mesh) {
-            this.mesh.rotation.z = this.spinePhysics.bend;
-        }
-        
-        // Jelly-like leg physics with spring simulation
-        ['left', 'right'].forEach(side => {
-            const targetPos = new THREE.Vector3(
-                side === 'left' ? -0.5 : 0.5,
-                -1.5,
-                0
-            );
-            
-            // Spring force towards target position
-            const displacement = new THREE.Vector3().subVectors(targetPos, this.legPhysics[side].position);
-            this.legPhysics[side].velocity.addScaledVector(displacement, this.springConstants.leg.strength);
-            this.legPhysics[side].velocity.multiplyScalar(this.springConstants.leg.damping);
-            this.legPhysics[side].position.add(this.legPhysics[side].velocity);
-        });
-        
-        // Physics-based arm simulation
-        ['left', 'right'].forEach(side => {
-            const arm = side === 'left' ? this.leftArm : this.rightArm;
-            if (!arm || this.isGrabbing) return;
-            
-            const targetRotZ = side === 'left' ? Math.PI / 4 : -Math.PI / 4;
-            
-            // Spring force on arm rotation
-            const rotDisplacement = targetRotZ - arm.rotation.z;
-            this.armPhysics[side].angularVelocity.z += rotDisplacement * this.springConstants.arm.strength;
-            this.armPhysics[side].angularVelocity.z *= this.springConstants.arm.damping;
-            
-            // Apply angular velocity
-            arm.rotation.z += this.armPhysics[side].angularVelocity.z;
-        });
+    setupAnimations() {
+        // Define smooth animation keyframes for different states
+        this.animationKeyframes = {
+            idle: {
+                duration: 2.0,
+                loop: true,
+                keyframes: {
+                    leftArm: [
+                        { time: 0.0, rotation: { x: 0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: 0 } },
+                        { time: 1.0, rotation: { x: 0.1, y: 0, z: Math.PI / 4 + 0.1 }, position: { x: -1.1, y: 0.5, z: 0 } },
+                        { time: 2.0, rotation: { x: 0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: 0 } }
+                    ],
+                    rightArm: [
+                        { time: 0.0, rotation: { x: 0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0 } },
+                        { time: 1.0, rotation: { x: 0.1, y: 0, z: -Math.PI / 4 - 0.1 }, position: { x: 1.1, y: 0.5, z: 0 } },
+                        { time: 2.0, rotation: { x: 0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0 } }
+                    ],
+                    leftLeg: [
+                        { time: 0.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
+                        { time: 1.0, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
+                        { time: 2.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } }
+                    ],
+                    rightLeg: [
+                        { time: 0.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
+                        { time: 1.0, rotation: { x: -0.05, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
+                        { time: 2.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } }
+                    ],
+                    head: [
+                        { time: 0.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 1.0, rotation: { x: 0, y: 0.2, z: 0 }, position: { x: 0, y: 2.05, z: 0 } },
+                        { time: 2.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } }
+                    ]
+                }
+            },
+            walk: {
+                duration: 0.6,
+                loop: true,
+                keyframes: {
+                    leftArm: [
+                        { time: 0.0, rotation: { x: 1.0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: -0.4 } },
+                        { time: 0.3, rotation: { x: -1.0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: 0.4 } },
+                        { time: 0.6, rotation: { x: 1.0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: -0.4 } }
+                    ],
+                    rightArm: [
+                        { time: 0.0, rotation: { x: -1.0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0.4 } },
+                        { time: 0.3, rotation: { x: 1.0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: -0.4 } },
+                        { time: 0.6, rotation: { x: -1.0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0.4 } }
+                    ],
+                    leftLeg: [
+                        { time: 0.0, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
+                        { time: 0.15, rotation: { x: 1.2, y: 0, z: 0 }, position: { x: -0.5, y: -1.2, z: 0 } },
+                        { time: 0.3, rotation: { x: -0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
+                        { time: 0.6, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } }
+                    ],
+                    rightLeg: [
+                        { time: 0.0, rotation: { x: -0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
+                        { time: 0.3, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
+                        { time: 0.45, rotation: { x: 1.2, y: 0, z: 0 }, position: { x: 0.5, y: -1.2, z: 0 } },
+                        { time: 0.6, rotation: { x: -0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } }
+                    ],
+                    head: [
+                        { time: 0.0, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 0.15, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.1, z: 0 } },
+                        { time: 0.3, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 0.45, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.1, z: 0 } },
+                        { time: 0.6, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } }
+                    ]
+                }
+            },
+            punch: {
+                duration: 0.5,
+                loop: false,
+                keyframes: {
+                    rightArm: [
+                        { time: 0.0, rotation: { x: -0.5, y: 0, z: -Math.PI / 6 }, position: { x: 1.1, y: 0.5, z: 0 } },
+                        { time: 0.25, rotation: { x: 0, y: 0, z: -Math.PI / 2 }, position: { x: 1.5, y: 0.5, z: 0.5 } },
+                        { time: 0.5, rotation: { x: 0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0 } }
+                    ]
+                }
+            },
+            kick: {
+                duration: 0.6,
+                loop: false,
+                keyframes: {
+                    leftLeg: [
+                        { time: 0.0, rotation: { x: -0.3, y: 0, z: 0 }, position: { x: -0.5, y: -1.3, z: 0 } },
+                        { time: 0.3, rotation: { x: Math.PI / 2, y: 0, z: 0 }, position: { x: -0.5, y: -1.0, z: 0 } },
+                        { time: 0.6, rotation: { x: 0, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } }
+                    ],
+                    rightLeg: [
+                        { time: 0.0, rotation: { x: -0.3, y: 0, z: 0 }, position: { x: 0.5, y: -1.3, z: 0 } },
+                        { time: 0.3, rotation: { x: Math.PI / 2, y: 0, z: 0 }, position: { x: 0.5, y: -1.0, z: 0 } },
+                        { time: 0.6, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } }
+                    ]
+                }
+            },
+            knockout: {
+                duration: 1.5,
+                loop: true,
+                keyframes: {
+                    leftArm: [
+                        { time: 0.0, rotation: { x: 1.8, y: 0, z: 1.2 }, position: { x: -1.1, y: 0.3, z: 0 } },
+                        { time: 0.75, rotation: { x: 2.0, y: 0, z: 1.4 }, position: { x: -1.1, y: 0.4, z: 0 } },
+                        { time: 1.5, rotation: { x: 1.8, y: 0, z: 1.2 }, position: { x: -1.1, y: 0.3, z: 0 } }
+                    ],
+                    rightArm: [
+                        { time: 0.0, rotation: { x: 1.8, y: 0, z: -1.2 }, position: { x: 1.1, y: 0.3, z: 0 } },
+                        { time: 0.75, rotation: { x: 2.0, y: 0, z: -1.4 }, position: { x: 1.1, y: 0.4, z: 0 } },
+                        { time: 1.5, rotation: { x: 1.8, y: 0, z: -1.2 }, position: { x: 1.1, y: 0.3, z: 0 } }
+                    ],
+                    leftLeg: [
+                        { time: 0.0, rotation: { x: 0.8, y: 0, z: 0.3 }, position: { x: -0.5, y: -1.4, z: 0 } },
+                        { time: 0.75, rotation: { x: 1.0, y: 0, z: 0.4 }, position: { x: -0.5, y: -1.3, z: 0 } },
+                        { time: 1.5, rotation: { x: 0.8, y: 0, z: 0.3 }, position: { x: -0.5, y: -1.4, z: 0 } }
+                    ],
+                    rightLeg: [
+                        { time: 0.0, rotation: { x: 0.8, y: 0, z: -0.3 }, position: { x: 0.5, y: -1.4, z: 0 } },
+                        { time: 0.75, rotation: { x: 1.0, y: 0, z: -0.4 }, position: { x: 0.5, y: -1.3, z: 0 } },
+                        { time: 1.5, rotation: { x: 0.8, y: 0, z: -0.3 }, position: { x: 0.5, y: -1.4, z: 0 } }
+                    ],
+                    head: [
+                        { time: 0.0, rotation: { x: 0.3, y: 0.2, z: 0.2 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 0.5, rotation: { x: 0.4, y: 0.3, z: 0.3 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 1.0, rotation: { x: 0.3, y: 0.2, z: 0.2 }, position: { x: 0, y: 2.0, z: 0 } }
+                    ]
+                }
+            }
+        };
     }
     
     setupAI() {
@@ -622,9 +717,6 @@ class Character {
         // Sync visual mesh with physics body
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
-        
-        // Update spring physics for head, arms, legs, spine
-        this.updateSpringPhysics();
         
         // ALWAYS keep character upright (Gang Beasts style stabilization)
         // Even when knocked out or stunned, maintain upright orientation
@@ -679,7 +771,7 @@ class Character {
             this.actionCooldown = 0; // Prevent negative values
         }
         
-        // Animate limbs
+        // Animate limbs with smooth animation system
         this.animateLimbs();
     }
     
@@ -1677,185 +1769,148 @@ class Character {
         }, 10000);
     }
     
-    animateLimbs() {
-        // EXTREMELY ENHANCED limb animations for VERY VISIBLE movement (Party Animals style)
+    // Smooth animation system with keyframe interpolation
+    updateAnimation(deltaTime) {
+        // Determine animation state based on character state
         const speed = Math.sqrt(
             this.body.velocity.x * this.body.velocity.x +
             this.body.velocity.z * this.body.velocity.z
         );
         
-        if (speed > 0.3 && !this.isKnockedOut && !this.isStunned) {
-            // HILARIOUS running animation with EXTREME exaggerated movements
-            const time = Date.now() * 0.025; // Faster for more comedy
-            const intensity = Math.min(speed / 3, 3.0); // Much higher intensity
-            
-            if (this.leftLeg) {
-                // SUPER HIGH knee lifts (almost to chest)
-                const legSwing = Math.sin(time) * 1.8 * intensity;
-                this.leftLeg.rotation.x = legSwing;
-                this.leftLeg.rotation.z = Math.sin(time * 0.5) * 0.4; // More wobble
-                
-                // DRAMATIC knee lift position change
-                if (Math.sin(time) > 0.2) {
-                    this.leftLeg.position.y = -0.5; // Way up near torso
-                } else {
-                    this.leftLeg.position.y = -1.5;
-                }
-                
-                // Foot flaps wildly
-                if (this.leftFoot) {
-                    this.leftFoot.rotation.x = Math.sin(time) * 0.8;
-                }
-            }
-            if (this.rightLeg) {
-                const legSwing = Math.sin(time + Math.PI) * 1.8 * intensity;
-                this.rightLeg.rotation.x = legSwing;
-                this.rightLeg.rotation.z = Math.sin(time * 0.5 + Math.PI) * 0.4;
-                
-                if (Math.sin(time + Math.PI) > 0.2) {
-                    this.rightLeg.position.y = -0.5; // Way up
-                } else {
-                    this.rightLeg.position.y = -1.5;
-                }
-                
-                if (this.rightFoot) {
-                    this.rightFoot.rotation.x = Math.sin(time + Math.PI) * 0.8;
-                }
-            }
-            
-            // WILDLY PUMPING arms while running (like Naruto run but backwards)
-            if (this.leftArm && !this.isGrabbing) {
-                this.leftArm.rotation.x = Math.sin(time + Math.PI) * 2.0 * intensity; // MASSIVE arm swing
-                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time * 0.3) * 0.6; // Huge sway
-                this.leftArm.position.z = Math.sin(time + Math.PI) * 0.6; // Way forward-back
-                
-                // Hand flaps
-                if (this.leftHand) {
-                    this.leftHand.rotation.x = Math.sin(time * 2) * 1.0;
-                }
-            }
-            if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.x = Math.sin(time) * 2.0 * intensity; // MASSIVE arm swing
-                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time * 0.3) * 0.6;
-                this.rightArm.position.z = Math.sin(time) * 0.6;
-                
-                if (this.rightHand) {
-                    this.rightHand.rotation.x = Math.sin(time * 2 + Math.PI) * 1.0;
-                }
-            }
-            
-            // EXTREME head bobbing and turning while running
-            if (this.head) {
-                this.head.rotation.y = Math.sin(time * 0.8) * 0.5; // Big head turns
-                this.head.position.y = 2.0 + Math.abs(Math.sin(time * 2.5)) * 0.4; // HUGE bobbing
-                this.head.rotation.x = Math.sin(time * 1.5) * 0.2; // Nod
-                this.head.rotation.z = Math.sin(time * 0.6) * 0.25; // Head wobble
-            }
-            
-            // Eyes dart around frantically when running
-            if (this.leftEye && this.rightEye) {
-                const eyeTime = Date.now() * 0.01;
-                this.leftEye.position.x = -0.25 + Math.sin(eyeTime) * 0.1;
-                this.rightEye.position.x = 0.25 + Math.sin(eyeTime) * 0.1;
-            }
-            
-        } else if (!this.isKnockedOut && !this.isStunned) {
-            // MUCH MORE ACTIVE idle animation - breathing and fidgeting
-            const time = Date.now() * 0.005;
-            
-            // Shifting weight from foot to foot
-            if (this.leftArm && !this.isGrabbing) {
-                this.leftArm.rotation.z = Math.PI / 4 + Math.sin(time) * 0.25;
-                this.leftArm.rotation.x = Math.sin(time * 0.7) * 0.3;
-                this.leftArm.position.z = 0;
-                if (this.leftHand) {
-                    this.leftHand.rotation.x = Math.sin(time * 1.2) * 0.3;
-                }
-            }
-            if (this.rightArm && !this.isGrabbing) {
-                this.rightArm.rotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.25;
-                this.rightArm.rotation.x = Math.sin(time * 0.7 + Math.PI) * 0.3;
-                this.rightArm.position.z = 0;
-                if (this.rightHand) {
-                    this.rightHand.rotation.x = Math.sin(time * 1.2 + Math.PI) * 0.3;
-                }
-            }
-            
-            // Head looking around curiously
-            if (this.head) {
-                this.head.rotation.y = Math.sin(time * 0.5) * 0.6; // Big head turns
-                this.head.rotation.x = Math.sin(time * 0.3) * 0.15;
-                this.head.position.y = 2.0 + Math.sin(time * 1.2) * 0.12; // Breathing
-                this.head.rotation.z = Math.sin(time * 0.4) * 0.1;
-            }
-            
-            // Eyes blink occasionally
-            if (this.leftEye && this.rightEye && Math.random() < 0.01) {
-                this.leftEye.scale.y = 0.1;
-                this.rightEye.scale.y = 0.1;
-                setTimeout(() => {
-                    if (this.leftEye) this.leftEye.scale.y = 1;
-                    if (this.rightEye) this.rightEye.scale.y = 1;
-                }, 100);
-            }
-            
-            // Visible weight shifting in legs
-            if (this.leftLeg) {
-                this.leftLeg.rotation.x = Math.sin(time * 0.4) * 0.2;
-                this.leftLeg.position.y = -1.5;
-            }
-            if (this.rightLeg) {
-                this.rightLeg.rotation.x = Math.sin(time * 0.4 + Math.PI) * 0.2;
-                this.rightLeg.position.y = -1.5;
+        let targetState = 'idle';
+        if (this.isKnockedOut) {
+            targetState = 'knockout';
+        } else if (speed > 0.5) {
+            targetState = 'walk';
+        }
+        
+        // Smooth transition between animation states
+        if (this.animationState !== targetState) {
+            this.animationBlend = 0;
+            this.targetAnimationState = targetState;
+        }
+        
+        // Blend to target state
+        if (this.animationBlend < 1.0) {
+            this.animationBlend = Math.min(1.0, this.animationBlend + deltaTime * 3.0);
+        } else {
+            this.animationState = this.targetAnimationState;
+        }
+        
+        // Update animation time
+        const currentAnim = this.animationKeyframes[this.animationState];
+        if (currentAnim) {
+            this.animationTime += deltaTime * (speed > 0.5 ? 1.5 : 1.0);
+            if (currentAnim.loop && this.animationTime > currentAnim.duration) {
+                this.animationTime = this.animationTime % currentAnim.duration;
+            } else if (!currentAnim.loop && this.animationTime > currentAnim.duration) {
+                this.animationTime = currentAnim.duration;
             }
         }
         
-        // MUCH MORE DRAMATIC ragdoll physics for knocked out characters
-        if (this.isKnockedOut && !this.isGrabbed) {
-            // Make limbs VERY floppy with exaggerated physics-based wobble
-            const wobble = Math.sin(Date.now() * 0.03) * 2.0; // Much stronger
-            const wobble2 = Math.cos(Date.now() * 0.025) * 2.0;
+        // Apply animations with smooth interpolation
+        this.applyKeyframeAnimation(this.animationState, this.animationTime);
+        
+        // Apply subtle secondary motion for realism
+        this.applySecondaryMotion();
+    }
+    
+    applyKeyframeAnimation(stateName, time) {
+        const anim = this.animationKeyframes[stateName];
+        if (!anim) return;
+        
+        const bodyParts = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg', 'head'];
+        
+        bodyParts.forEach(partName => {
+            const keyframes = anim.keyframes[partName];
+            if (!keyframes || keyframes.length < 2) return;
             
-            if (this.leftArm) {
-                this.leftArm.rotation.z = wobble * 2.0; // Super dramatic
-                this.leftArm.rotation.x = wobble2 * 1.8;
-                if (this.leftHand) this.leftHand.rotation.x = wobble * 1.5;
-            }
-            if (this.rightArm) {
-                this.rightArm.rotation.z = -wobble * 2.0;
-                this.rightArm.rotation.x = -wobble2 * 1.8;
-                if (this.rightHand) this.rightHand.rotation.x = -wobble * 1.5;
-            }
-            if (this.leftLeg) {
-                this.leftLeg.rotation.x = wobble2 * 1.5;
-                this.leftLeg.rotation.z = wobble * 0.8;
-                if (this.leftFoot) this.leftFoot.rotation.x = wobble * 0.8;
-            }
-            if (this.rightLeg) {
-                this.rightLeg.rotation.x = -wobble2 * 1.5;
-                this.rightLeg.rotation.z = -wobble * 0.8;
-                if (this.rightFoot) this.rightFoot.rotation.x = -wobble * 0.8;
+            // Find surrounding keyframes
+            let prevKeyframe = keyframes[0];
+            let nextKeyframe = keyframes[keyframes.length - 1];
+            
+            for (let i = 0; i < keyframes.length - 1; i++) {
+                if (time >= keyframes[i].time && time <= keyframes[i + 1].time) {
+                    prevKeyframe = keyframes[i];
+                    nextKeyframe = keyframes[i + 1];
+                    break;
+                }
             }
             
-            // Head lolling dramatically - VERY OBVIOUSLY unconscious
+            // Interpolate between keyframes
+            const duration = nextKeyframe.time - prevKeyframe.time;
+            const t = duration > 0 ? (time - prevKeyframe.time) / duration : 0;
+            
+            // Smooth interpolation using ease-in-out
+            const smoothT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            
+            // Get the mesh
+            const mesh = this[partName];
+            if (!mesh) return;
+            
+            // Interpolate rotation
+            if (prevKeyframe.rotation && nextKeyframe.rotation) {
+                mesh.rotation.x = this.lerp(prevKeyframe.rotation.x, nextKeyframe.rotation.x, smoothT);
+                mesh.rotation.y = this.lerp(prevKeyframe.rotation.y, nextKeyframe.rotation.y, smoothT);
+                mesh.rotation.z = this.lerp(prevKeyframe.rotation.z, nextKeyframe.rotation.z, smoothT);
+            }
+            
+            // Interpolate position
+            if (prevKeyframe.position && nextKeyframe.position) {
+                mesh.position.x = this.lerp(prevKeyframe.position.x, nextKeyframe.position.x, smoothT);
+                mesh.position.y = this.lerp(prevKeyframe.position.y, nextKeyframe.position.y, smoothT);
+                mesh.position.z = this.lerp(prevKeyframe.position.z, nextKeyframe.position.z, smoothT);
+            }
+        });
+    }
+    
+    applySecondaryMotion() {
+        // Add subtle breathing and idle motion
+        if (!this.isKnockedOut && !this.isStunned) {
+            const breathTime = Date.now() * 0.001;
+            const breathAmount = Math.sin(breathTime * 2) * 0.02;
+            
             if (this.head) {
-                this.head.rotation.x = wobble * 1.2;
-                this.head.rotation.y = wobble2 * 1.5;
-                this.head.rotation.z = wobble * 0.8;
+                this.head.position.y += breathAmount;
             }
             
-            // Eyes rolled back or closed
+            // Subtle eye movement
             if (this.leftEye && this.rightEye) {
-                this.leftEye.position.y = 0.05; // Rolled up
-                this.rightEye.position.y = 0.05;
-            }
-            
-            // Mouth hanging open
-            if (this.mouth) {
-                this.mouth.scale.set(1.2, 1.5, 1);
-                this.mouth.rotation.z = wobble * 0.3;
+                if (Math.random() < 0.005) {
+                    // Blink
+                    this.leftEye.scale.y = 0.1;
+                    this.rightEye.scale.y = 0.1;
+                    setTimeout(() => {
+                        if (this.leftEye) this.leftEye.scale.y = 1;
+                        if (this.rightEye) this.rightEye.scale.y = 1;
+                    }, 100);
+                }
             }
         }
+        
+        // Physics-based head wobble
+        if (this.head && !this.isKnockedOut) {
+            const velocity = this.body.velocity;
+            const speed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            
+            // Subtle head lean based on velocity
+            const targetHeadRotZ = -velocity.x * 0.02;
+            const targetHeadRotX = Math.min(speed * 0.05, 0.2);
+            
+            this.head.rotation.z += (targetHeadRotZ - this.head.rotation.z) * 0.1;
+            this.head.rotation.x += (targetHeadRotX - this.head.rotation.x) * 0.1;
+        }
+    }
+    
+    lerp(start, end, t) {
+        return start + (end - start) * t;
+    }
+    
+    animateLimbs() {
+        // This method is now called from update() but uses the smooth animation system
+        // Keep for backward compatibility with existing attack animations
+        const deltaTime = 1 / 60; // Approximate delta time
+        this.updateAnimation(deltaTime);
     }
     
     die() {

@@ -88,7 +88,14 @@ Characters have three main states:
 - Strong gravity for dramatic falls
 - Platform edge detection
 - Momentum-based combat
-- Limb animation based on movement
+- Smooth keyframe-based animations (see ANIMATION_SYSTEM.md)
+
+### Animation System
+- **Keyframe-Based**: Smooth interpolation between animation states
+- **State Management**: Idle, walk, punch, kick, knockout animations
+- **Blending**: Seamless transitions between animation states
+- **Secondary Motion**: Breathing, blinking, physics-based head movement
+- **No Jittering**: Replaced old procedural system with professional animation framework
 
 ## Customization
 
