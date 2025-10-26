@@ -240,6 +240,11 @@ class PhysicsCharacter {
             mesh.quaternion.copy(body.quaternion);
         }
         
+        // Apply motor forces to limbs for active pose
+        if (!this.isKnockedOut) {
+            this.applyLimbMotors();
+        }
+        
         // Power boost timer
         if (this.powerBoostTimer > 0) {
             this.powerBoostTimer--;
@@ -283,34 +288,86 @@ class PhysicsCharacter {
         }
     }
     
+    applyLimbMotors() {
+        // Apply subtle motor forces to keep limbs in natural standing pose
+        // This helps characters look more active and less floppy
+        
+        // Keep legs somewhat straight for standing
+        const leftUpperLeg = this.bodies.leftUpperLeg;
+        const rightUpperLeg = this.bodies.rightUpperLeg;
+        const leftLowerLeg = this.bodies.leftLowerLeg;
+        const rightLowerLeg = this.bodies.rightLowerLeg;
+        
+        // Apply slight straightening force to legs
+        if (leftUpperLeg.position.y < -0.5) {
+            leftUpperLeg.applyForce(new CANNON.Vec3(0, 20, 0), leftUpperLeg.position);
+        }
+        if (rightUpperLeg.position.y < -0.5) {
+            rightUpperLeg.applyForce(new CANNON.Vec3(0, 20, 0), rightUpperLeg.position);
+        }
+        
+        // Keep lower legs from bending backward
+        const leftKneeAngle = leftUpperLeg.position.y - leftLowerLeg.position.y;
+        if (leftKneeAngle < 0.3) {
+            leftLowerLeg.applyForce(new CANNON.Vec3(0, -15, 0), leftLowerLeg.position);
+        }
+        
+        const rightKneeAngle = rightUpperLeg.position.y - rightLowerLeg.position.y;
+        if (rightKneeAngle < 0.3) {
+            rightLowerLeg.applyForce(new CANNON.Vec3(0, -15, 0), rightLowerLeg.position);
+        }
+        
+        // Keep arms at sides with slight outward force
+        const leftArm = this.bodies.leftUpperArm;
+        const rightArm = this.bodies.rightUpperArm;
+        
+        leftArm.angularVelocity.scale(0.9, leftArm.angularVelocity);
+        rightArm.angularVelocity.scale(0.9, rightArm.angularVelocity);
+    }
+    
     applyBalanceForce() {
         // Apply forces to keep character upright (Gang Beasts style motor system)
         if (!this.isKnockedOut) {
             const hips = this.bodies.hips;
             const spine = this.bodies.spine;
             const chest = this.bodies.chest;
+            const leftFoot = this.bodies.leftFoot;
+            const rightFoot = this.bodies.rightFoot;
             
             // Strong upward force to keep character standing
             const targetHeight = 0; // Platform level
-            if (hips.position.y < targetHeight) {
-                const upForce = (targetHeight - hips.position.y) * 200 * this.speed;
+            if (hips.position.y < targetHeight + 1.0) {
+                const upForce = (targetHeight + 1.0 - hips.position.y) * 400 * this.speed;
                 hips.applyForce(new CANNON.Vec3(0, upForce, 0), hips.position);
             }
             
-            // Apply strong angular damping to keep torso upright
-            hips.angularVelocity.scale(0.7, hips.angularVelocity);
-            spine.angularVelocity.scale(0.7, spine.angularVelocity);
-            chest.angularVelocity.scale(0.7, chest.angularVelocity);
+            // Keep feet on ground with downward bias
+            if (leftFoot.position.y > -3) {
+                leftFoot.applyForce(new CANNON.Vec3(0, -50, 0), leftFoot.position);
+            }
+            if (rightFoot.position.y > -3) {
+                rightFoot.applyForce(new CANNON.Vec3(0, -50, 0), rightFoot.position);
+            }
             
-            // Try to keep hips level (reduce X and Z rotation)
+            // Apply strong angular damping to keep torso upright
+            hips.angularVelocity.scale(0.6, hips.angularVelocity);
+            spine.angularVelocity.scale(0.6, spine.angularVelocity);
+            chest.angularVelocity.scale(0.6, chest.angularVelocity);
+            
+            // Try to keep hips level (reduce X and Z rotation) - stronger correction
             const uprightQuaternion = new CANNON.Quaternion();
             uprightQuaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
             
-            // Blend towards upright orientation
-            const blendFactor = 0.02;
+            // Blend towards upright orientation - stronger blend
+            const blendFactor = 0.05;
             hips.quaternion.x = hips.quaternion.x * (1 - blendFactor) + uprightQuaternion.x * blendFactor;
             hips.quaternion.z = hips.quaternion.z * (1 - blendFactor) + uprightQuaternion.z * blendFactor;
             hips.quaternion.normalize();
+            
+            // Also stabilize spine and chest
+            spine.quaternion.x = spine.quaternion.x * (1 - blendFactor * 0.5);
+            spine.quaternion.z = spine.quaternion.z * (1 - blendFactor * 0.5);
+            spine.quaternion.normalize();
         }
     }
     
