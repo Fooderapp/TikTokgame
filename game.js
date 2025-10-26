@@ -17,6 +17,10 @@ class Game {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         
+        // Time tracking for deltaTime
+        this.lastTime = performance.now();
+        this.useAnimatedCharacters = true; // Toggle for new animation system
+        
         this.init();
     }
     
@@ -239,7 +243,9 @@ class Game {
     }
     
     spawnCharacter(team) {
-        const character = new PhysicsCharacter(this, team);
+        // Use new AnimatedCharacter system for better animations
+        const CharacterClass = this.useAnimatedCharacters ? AnimatedCharacter : PhysicsCharacter;
+        const character = new CharacterClass(this, team);
         this.characters.push(character);
         this.updateCharacterCount();
         return character;
@@ -327,13 +333,26 @@ class Game {
     animate() {
         requestAnimationFrame(() => this.animate());
         
+        // Calculate deltaTime
+        const currentTime = performance.now();
+        const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+        this.lastTime = currentTime;
+        
+        // Clamp deltaTime to prevent huge jumps
+        const clampedDeltaTime = Math.min(deltaTime, 0.1);
+        
         // Update physics
         this.world.step(1 / 60);
         
         // Update characters
         for (let i = this.characters.length - 1; i >= 0; i--) {
             const char = this.characters[i];
-            char.update();
+            // Pass deltaTime for smooth animations
+            if (this.useAnimatedCharacters) {
+                char.update(clampedDeltaTime);
+            } else {
+                char.update();
+            }
             
             // Remove dead characters that fell off
             if (char.body.position.y < -40 && char.isAlive) {
