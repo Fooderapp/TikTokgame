@@ -181,11 +181,19 @@ class MixamoLoader {
             animations[name] = mixer.clipAction(action.getClip());
         }
         
+        // Find the SkinnedMesh in the cloned model
+        let skinnedMesh = null;
+        characterModel.traverse((child) => {
+            if (child.isSkinnedMesh) {
+                skinnedMesh = child;
+            }
+        });
+        
         return {
             model: characterModel,
             mixer: mixer,
             animations: animations,
-            bones: this.createMixamoBoneMap(characterModel.getObjectByProperty('type', 'SkinnedMesh')),
+            bones: this.createMixamoBoneMap(skinnedMesh),
             scale: modelData.scale
         };
     }
@@ -206,10 +214,7 @@ class MixamoLoader {
 
 // Make GLTFLoader available if not already loaded
 if (typeof THREE.GLTFLoader === 'undefined') {
-    console.warn('GLTFLoader not found. Loading from CDN...');
-    
-    // Dynamically load GLTFLoader
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
-    document.head.appendChild(script);
+    console.warn('GLTFLoader not found. Please add GLTFLoader script to your HTML:');
+    console.warn('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>');
+    console.warn('Or use the module version with import statements.');
 }

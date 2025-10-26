@@ -27,8 +27,6 @@ The TikTok Battle Arena now features a **professional animation-driven character
 
 ## System Architecture
 
-## System Architecture
-
 ### Movement Control
 
 **Animation-Driven (Normal State):**
