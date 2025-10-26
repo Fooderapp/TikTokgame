@@ -535,7 +535,7 @@ class Character {
             
             if (this.isGrabbed) {
                 // Try to wake up faster when grabbed - struggle animation
-                this.wakeupProgress += 0.5;
+                this.wakeupProgress += 0.7; // Even faster struggle
                 this.animateStruggle();
                 if (this.wakeupProgress > 100) {
                     this.wakeUp();
@@ -777,7 +777,7 @@ class Character {
         for (const char of this.game.characters) {
             if (char.team !== this.team && char.isAlive && char.isKnockedOut && !char.isGrabbed) {
                 const distance = this.body.position.distanceTo(char.body.position);
-                if (distance < 4) {
+                if (distance < 5) { // Increased grab range
                     this.grabCharacter(char);
                     break;
                 }
@@ -803,14 +803,14 @@ class Character {
             // Perform attack - varied attack patterns (Gang Beasts style)
             const attackType = Math.random();
             
-            if (attackType < 0.4) {
-                this.punch(this.aiTarget);
-            } else if (attackType < 0.7) {
-                this.dropkick(this.aiTarget);
-            } else if (attackType < 0.85) {
-                this.headbutt(this.aiTarget);
+            if (attackType < 0.5) {
+                this.punch(this.aiTarget); // 50% punch for main attack
+            } else if (attackType < 0.8) {
+                this.dropkick(this.aiTarget); // 30% dropkick
+            } else if (attackType < 0.9) {
+                this.headbutt(this.aiTarget); // 10% headbutt
             } else {
-                this.jumpAttack(this.aiTarget);
+                this.jumpAttack(this.aiTarget); // 10% jump attack
             }
             
             this.actionCooldown = 30 + Math.random() * 30; // Faster cooldown for more action
@@ -889,14 +889,14 @@ class Character {
         }
         
         // Apply force at the center of mass for better balance
-        const force = direction.scale(600 * this.speed); // Much stronger force for visible movement
+        const force = direction.scale(700 * this.speed); // Even stronger force for faster movement
         this.body.applyForce(force, this.body.position);
         
         // Wake up the body if it's sleeping
         this.body.wakeUp();
         
         // Limit speed
-        const maxSpeed = 20 * this.speed; // Much higher max speed for dynamic action
+        const maxSpeed = 25 * this.speed; // Higher max speed for more dynamic action
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
@@ -1311,10 +1311,69 @@ class Character {
     
     knockout() {
         this.isKnockedOut = true;
-        this.knockoutTimer = 180 + Math.random() * 120; // 3-5 seconds
+        this.knockoutTimer = 150 + Math.random() * 90; // 2.5-4 seconds for more action
         this.wakeupProgress = 0;
         this.mesh.material.transparent = true;
         this.changeAIState('idle');
+        
+        // Dramatic knockout reaction - big spin and fall
+        this.body.angularVelocity.set(
+            (Math.random() - 0.5) * 15,
+            (Math.random() - 0.5) * 8,
+            (Math.random() - 0.5) * 15
+        );
+        
+        // Show knockout stars effect
+        this.showKnockoutEffect();
+    }
+    
+    showKnockoutEffect() {
+        // Create spinning stars above knocked out character
+        const starTexts = ['⭐', '✨', '💫'];
+        starTexts.forEach((star, i) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const context = canvas.getContext('2d');
+            context.font = 'bold 80px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(star, 64, 64);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ 
+                map: texture,
+                transparent: true,
+                opacity: 1
+            });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(0.8, 0.8, 1);
+            sprite.position.copy(this.body.position);
+            sprite.position.y += 3;
+            
+            this.game.scene.add(sprite);
+            
+            // Orbit around head
+            let angle = (i / starTexts.length) * Math.PI * 2;
+            let time = 0;
+            const animateStars = () => {
+                time++;
+                angle += 0.05;
+                const radius = 1.5;
+                sprite.position.x = this.body.position.x + Math.cos(angle) * radius;
+                sprite.position.z = this.body.position.z + Math.sin(angle) * radius;
+                sprite.position.y = this.body.position.y + 3 + Math.sin(time * 0.1) * 0.3;
+                
+                if (time < 120 && this.isKnockedOut) { // Show for ~2 seconds
+                    requestAnimationFrame(animateStars);
+                } else {
+                    this.game.scene.remove(sprite);
+                    texture.dispose();
+                    material.dispose();
+                }
+            };
+            requestAnimationFrame(animateStars);
+        });
     }
     
     wakeUp() {
@@ -1393,7 +1452,7 @@ class Character {
             Math.pow(this.body.position.x, 2) + Math.pow(this.body.position.z, 2)
         );
         
-        if (distanceToEdge > 13) {
+        if (distanceToEdge > 12) { // Closer to edge for faster action
             // Dramatic throw animation
             this.throwCharacter();
         }
@@ -1418,14 +1477,14 @@ class Character {
             );
             throwDirection.normalize();
             
-            const throwForce = throwDirection.scale(500); // Stronger throw
+            const throwForce = throwDirection.scale(600); // Even stronger throw
             this.grabbedTarget.body.applyImpulse(throwForce, this.grabbedTarget.body.position);
             
-            // Add spin for comedic effect
+            // Add MORE spin for comedic effect
             this.grabbedTarget.body.angularVelocity.set(
+                (Math.random() - 0.5) * 20,
                 (Math.random() - 0.5) * 15,
-                (Math.random() - 0.5) * 10,
-                (Math.random() - 0.5) * 15
+                (Math.random() - 0.5) * 20
             );
             
             // Throwing animation follow-through
@@ -1459,13 +1518,20 @@ class Character {
     }
     
     breakFree() {
-        // Apply force to push away from grabber
+        // Apply BIGGER force to push away from grabber - very dramatic escape!
         const escapeForce = new CANNON.Vec3(
-            (Math.random() - 0.5) * 200,
-            150,
-            (Math.random() - 0.5) * 200
+            (Math.random() - 0.5) * 300, // Stronger horizontal escape
+            200, // Higher jump on escape
+            (Math.random() - 0.5) * 300
         );
         this.body.applyImpulse(escapeForce, this.body.position);
+        
+        // Add spin for dramatic effect
+        this.body.angularVelocity.set(
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 10
+        );
         
         this.isGrabbed = false;
     }
