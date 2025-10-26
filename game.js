@@ -607,35 +607,37 @@ class Character {
                 }
             },
             walk: {
-                duration: 0.8,
+                duration: 0.6,
                 loop: true,
                 keyframes: {
                     leftArm: [
-                        { time: 0.0, rotation: { x: 0.6, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: -0.2 } },
-                        { time: 0.4, rotation: { x: -0.6, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: 0.2 } },
-                        { time: 0.8, rotation: { x: 0.6, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: -0.2 } }
+                        { time: 0.0, rotation: { x: 1.0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: -0.4 } },
+                        { time: 0.3, rotation: { x: -1.0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: 0.4 } },
+                        { time: 0.6, rotation: { x: 1.0, y: 0, z: Math.PI / 4 }, position: { x: -1.1, y: 0.5, z: -0.4 } }
                     ],
                     rightArm: [
-                        { time: 0.0, rotation: { x: -0.6, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0.2 } },
-                        { time: 0.4, rotation: { x: 0.6, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: -0.2 } },
-                        { time: 0.8, rotation: { x: -0.6, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0.2 } }
+                        { time: 0.0, rotation: { x: -1.0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0.4 } },
+                        { time: 0.3, rotation: { x: 1.0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: -0.4 } },
+                        { time: 0.6, rotation: { x: -1.0, y: 0, z: -Math.PI / 4 }, position: { x: 1.1, y: 0.5, z: 0.4 } }
                     ],
                     leftLeg: [
-                        { time: 0.0, rotation: { x: 0.5, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
-                        { time: 0.2, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.3, z: 0 } },
-                        { time: 0.4, rotation: { x: -0.5, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
-                        { time: 0.8, rotation: { x: 0.5, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } }
+                        { time: 0.0, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
+                        { time: 0.15, rotation: { x: 1.2, y: 0, z: 0 }, position: { x: -0.5, y: -1.2, z: 0 } },
+                        { time: 0.3, rotation: { x: -0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } },
+                        { time: 0.6, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: -0.5, y: -1.5, z: 0 } }
                     ],
                     rightLeg: [
-                        { time: 0.0, rotation: { x: -0.5, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
-                        { time: 0.4, rotation: { x: 0.5, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
-                        { time: 0.6, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.3, z: 0 } },
-                        { time: 0.8, rotation: { x: -0.5, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } }
+                        { time: 0.0, rotation: { x: -0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
+                        { time: 0.3, rotation: { x: 0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } },
+                        { time: 0.45, rotation: { x: 1.2, y: 0, z: 0 }, position: { x: 0.5, y: -1.2, z: 0 } },
+                        { time: 0.6, rotation: { x: -0.8, y: 0, z: 0 }, position: { x: 0.5, y: -1.5, z: 0 } }
                     ],
                     head: [
-                        { time: 0.0, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } },
-                        { time: 0.4, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 2.05, z: 0 } },
-                        { time: 0.8, rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } }
+                        { time: 0.0, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 0.15, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.1, z: 0 } },
+                        { time: 0.3, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } },
+                        { time: 0.45, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.1, z: 0 } },
+                        { time: 0.6, rotation: { x: 0.05, y: 0, z: 0 }, position: { x: 0, y: 2.0, z: 0 } }
                     ]
                 }
             },
@@ -667,18 +669,28 @@ class Character {
                 }
             },
             knockout: {
-                duration: 1.0,
+                duration: 1.5,
                 loop: true,
                 keyframes: {
                     leftArm: [
-                        { time: 0.0, rotation: { x: 1.5, y: 0, z: 0.8 }, position: { x: -1.1, y: 0.5, z: 0 } },
-                        { time: 0.5, rotation: { x: 1.7, y: 0, z: 1.0 }, position: { x: -1.1, y: 0.5, z: 0 } },
-                        { time: 1.0, rotation: { x: 1.5, y: 0, z: 0.8 }, position: { x: -1.1, y: 0.5, z: 0 } }
+                        { time: 0.0, rotation: { x: 1.8, y: 0, z: 1.2 }, position: { x: -1.1, y: 0.3, z: 0 } },
+                        { time: 0.75, rotation: { x: 2.0, y: 0, z: 1.4 }, position: { x: -1.1, y: 0.4, z: 0 } },
+                        { time: 1.5, rotation: { x: 1.8, y: 0, z: 1.2 }, position: { x: -1.1, y: 0.3, z: 0 } }
                     ],
                     rightArm: [
-                        { time: 0.0, rotation: { x: 1.5, y: 0, z: -0.8 }, position: { x: 1.1, y: 0.5, z: 0 } },
-                        { time: 0.5, rotation: { x: 1.7, y: 0, z: -1.0 }, position: { x: 1.1, y: 0.5, z: 0 } },
-                        { time: 1.0, rotation: { x: 1.5, y: 0, z: -0.8 }, position: { x: 1.1, y: 0.5, z: 0 } }
+                        { time: 0.0, rotation: { x: 1.8, y: 0, z: -1.2 }, position: { x: 1.1, y: 0.3, z: 0 } },
+                        { time: 0.75, rotation: { x: 2.0, y: 0, z: -1.4 }, position: { x: 1.1, y: 0.4, z: 0 } },
+                        { time: 1.5, rotation: { x: 1.8, y: 0, z: -1.2 }, position: { x: 1.1, y: 0.3, z: 0 } }
+                    ],
+                    leftLeg: [
+                        { time: 0.0, rotation: { x: 0.8, y: 0, z: 0.3 }, position: { x: -0.5, y: -1.4, z: 0 } },
+                        { time: 0.75, rotation: { x: 1.0, y: 0, z: 0.4 }, position: { x: -0.5, y: -1.3, z: 0 } },
+                        { time: 1.5, rotation: { x: 0.8, y: 0, z: 0.3 }, position: { x: -0.5, y: -1.4, z: 0 } }
+                    ],
+                    rightLeg: [
+                        { time: 0.0, rotation: { x: 0.8, y: 0, z: -0.3 }, position: { x: 0.5, y: -1.4, z: 0 } },
+                        { time: 0.75, rotation: { x: 1.0, y: 0, z: -0.4 }, position: { x: 0.5, y: -1.3, z: 0 } },
+                        { time: 1.5, rotation: { x: 0.8, y: 0, z: -0.3 }, position: { x: 0.5, y: -1.4, z: 0 } }
                     ],
                     head: [
                         { time: 0.0, rotation: { x: 0.3, y: 0.2, z: 0.2 }, position: { x: 0, y: 2.0, z: 0 } },
