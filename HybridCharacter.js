@@ -281,7 +281,7 @@ class HybridCharacter {
     }
     
     setupAI() {
-        this.aiThinkInterval = 30;
+        this.aiThinkInterval = 20; // Reduced from 30 for more responsive AI
         this.aiThinkCounter = 0;
     }
     
@@ -525,20 +525,21 @@ class HybridCharacter {
             );
             this.meshes.rightFoot.rotation.x = rightKneeBend * 0.3;
         } else if (!this.isKnockedOut) {
-            // Idle - legs in neutral position with slight breathing motion
+            // Idle - legs in neutral position
             if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
                 this.currentAnimation = 'idle';
             }
             const torsoPos = torso.position;
             
-            // Smoothly return to neutral
+            // Smoothly return to neutral standing position
             this.meshes.leftUpperLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 0.45, torsoPos.z);
             this.meshes.leftUpperLeg.rotation.x *= 0.9;
             
             this.meshes.leftLowerLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 1.35, torsoPos.z);
             this.meshes.leftLowerLeg.rotation.x *= 0.9;
             
-            this.meshes.leftFoot.position.set(torsoPos.x - 0.2, torsoPos.y - 1.9, torsoPos.z);
+            this.meshes.leftFoot.position.set(torsoPos.x - 0.2, torsoPos.y - 2.0, torsoPos.z);
+            this.meshes.leftFoot.rotation.x *= 0.9;
             
             this.meshes.rightUpperLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 0.45, torsoPos.z);
             this.meshes.rightUpperLeg.rotation.x *= 0.9;
@@ -546,7 +547,8 @@ class HybridCharacter {
             this.meshes.rightLowerLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 1.35, torsoPos.z);
             this.meshes.rightLowerLeg.rotation.x *= 0.9;
             
-            this.meshes.rightFoot.position.set(torsoPos.x + 0.2, torsoPos.y - 1.9, torsoPos.z);
+            this.meshes.rightFoot.position.set(torsoPos.x + 0.2, torsoPos.y - 2.0, torsoPos.z);
+            this.meshes.rightFoot.rotation.x *= 0.9;
         }
     }
     
