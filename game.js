@@ -55,11 +55,11 @@ class Game {
     setupPhysics() {
         // Cannon.js physics world
         this.world = new CANNON.World();
-        this.world.gravity.set(0, -30, 0); // Strong gravity for fun physics
+        this.world.gravity.set(0, -20, 0); // Reduced gravity for more realistic, slower fall
         this.world.broadphase = new CANNON.NaiveBroadphase();
-        this.world.solver.iterations = 10;
-        this.world.defaultContactMaterial.friction = 0.3;
-        this.world.defaultContactMaterial.restitution = 0.3;
+        this.world.solver.iterations = 15; // More iterations for better spring physics
+        this.world.defaultContactMaterial.friction = 0.4; // Higher friction for less sliding
+        this.world.defaultContactMaterial.restitution = 0.1; // Low bounce for realistic impact
     }
     
     createArena() {
@@ -403,11 +403,11 @@ class Character {
         // Box shape prevents rolling and keeps characters standing upright
         const bodyShape = new CANNON.Box(new CANNON.Vec3(0.6, 1.2, 0.6));
         this.body = new CANNON.Body({
-            mass: 5,
+            mass: 15, // Increased mass for realistic weight (3x heavier)
             shape: bodyShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.1, // Very low damping for maximum movement
-            angularDamping: 0.95, // Very high to strongly resist rotation
+            linearDamping: 0.4, // Higher damping for slower, more controlled movement
+            angularDamping: 0.98, // Very high to strongly resist rotation
             fixedRotation: false, // Allow rotation but heavily controlled
             sleepSpeedLimit: 0.01, // Very low threshold to prevent unwanted sleeping
             sleepTimeLimit: 100 // Only sleep after being still for a long time
@@ -426,6 +426,34 @@ class Character {
         // Track impact state for reactions
         this.lastHitTime = 0;
         this.isStunned = false;
+        
+        // Physics-based limb and head simulation with springs
+        this.armPhysics = {
+            left: { velocity: new CANNON.Vec3(0, 0, 0), angularVelocity: new CANNON.Vec3(0, 0, 0) },
+            right: { velocity: new CANNON.Vec3(0, 0, 0), angularVelocity: new CANNON.Vec3(0, 0, 0) }
+        };
+        this.legPhysics = {
+            left: { position: new THREE.Vector3(-0.5, -1.5, 0), velocity: new THREE.Vector3(0, 0, 0) },
+            right: { position: new THREE.Vector3(0.5, -1.5, 0), velocity: new THREE.Vector3(0, 0, 0) }
+        };
+        this.headPhysics = {
+            position: new THREE.Vector3(0, 2.0, 0),
+            velocity: new THREE.Vector3(0, 0, 0),
+            rotation: new THREE.Euler(0, 0, 0)
+        };
+        this.spinePhysics = {
+            bend: 0,
+            bendVelocity: 0
+        };
+        
+        // Spring physics constants for realistic movement
+        this.springConstants = {
+            head: { strength: 0.15, damping: 0.85, rotSpring: 0.08, rotDamping: 0.9 },
+            spine: { strength: 0.12, damping: 0.88 },
+            leg: { strength: 0.18, damping: 0.82 },
+            arm: { strength: 0.2, damping: 0.8 },
+            headReaction: 0.5 // Impact reaction multiplier
+        };
         
         // Add head - MUCH BIGGER for comedic effect (like Party Animals)
         const headGeometry = new THREE.SphereGeometry(0.9, 16, 16); // Much bigger head
@@ -507,6 +535,78 @@ class Character {
         this.rightLeg.add(this.rightFoot);
     }
     
+    
+    updateSpringPhysics() {
+        // Spring physics for head - bouncy, spring-like movement
+        const targetHeadY = 2.0;
+        
+        // Apply spring force to head
+        const headDisplacement = targetHeadY - this.headPhysics.position.y;
+        this.headPhysics.velocity.y += headDisplacement * this.springConstants.head.strength;
+        this.headPhysics.velocity.multiplyScalar(this.springConstants.head.damping);
+        this.headPhysics.position.y += this.headPhysics.velocity.y;
+        
+        // Head rotation spring (wobble)
+        this.headPhysics.velocity.x += -this.headPhysics.rotation.x * this.springConstants.head.rotSpring;
+        this.headPhysics.velocity.z += -this.headPhysics.rotation.z * this.springConstants.head.rotSpring;
+        this.headPhysics.velocity.x *= this.springConstants.head.rotDamping;
+        this.headPhysics.velocity.z *= this.springConstants.head.rotDamping;
+        this.headPhysics.rotation.x += this.headPhysics.velocity.x;
+        this.headPhysics.rotation.z += this.headPhysics.velocity.z;
+        
+        // Apply head physics to visual mesh
+        if (this.head) {
+            this.head.position.y = this.headPhysics.position.y;
+            this.head.rotation.x = this.headPhysics.rotation.x;
+            this.head.rotation.z = this.headPhysics.rotation.z;
+        }
+        
+        // Jelly-like spine physics
+        const velocity = this.body.velocity;
+        const targetBend = velocity.x * 0.02; // Bend based on horizontal movement
+        
+        const spineDisplacement = targetBend - this.spinePhysics.bend;
+        this.spinePhysics.bendVelocity += spineDisplacement * this.springConstants.spine.strength;
+        this.spinePhysics.bendVelocity *= this.springConstants.spine.damping;
+        this.spinePhysics.bend += this.spinePhysics.bendVelocity;
+        
+        // Apply spine bend to mesh
+        if (this.mesh) {
+            this.mesh.rotation.z = this.spinePhysics.bend;
+        }
+        
+        // Jelly-like leg physics with spring simulation
+        ['left', 'right'].forEach(side => {
+            const targetPos = new THREE.Vector3(
+                side === 'left' ? -0.5 : 0.5,
+                -1.5,
+                0
+            );
+            
+            // Spring force towards target position
+            const displacement = new THREE.Vector3().subVectors(targetPos, this.legPhysics[side].position);
+            this.legPhysics[side].velocity.addScaledVector(displacement, this.springConstants.leg.strength);
+            this.legPhysics[side].velocity.multiplyScalar(this.springConstants.leg.damping);
+            this.legPhysics[side].position.add(this.legPhysics[side].velocity);
+        });
+        
+        // Physics-based arm simulation
+        ['left', 'right'].forEach(side => {
+            const arm = side === 'left' ? this.leftArm : this.rightArm;
+            if (!arm || this.isGrabbing) return;
+            
+            const targetRotZ = side === 'left' ? Math.PI / 4 : -Math.PI / 4;
+            
+            // Spring force on arm rotation
+            const rotDisplacement = targetRotZ - arm.rotation.z;
+            this.armPhysics[side].angularVelocity.z += rotDisplacement * this.springConstants.arm.strength;
+            this.armPhysics[side].angularVelocity.z *= this.springConstants.arm.damping;
+            
+            // Apply angular velocity
+            arm.rotation.z += this.armPhysics[side].angularVelocity.z;
+        });
+    }
+    
     setupAI() {
         this.changeAIState('seeking');
     }
@@ -522,6 +622,9 @@ class Character {
         // Sync visual mesh with physics body
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
+        
+        // Update spring physics for head, arms, legs, spine
+        this.updateSpringPhysics();
         
         // ALWAYS keep character upright (Gang Beasts style stabilization)
         // Even when knocked out or stunned, maintain upright orientation
@@ -859,7 +962,7 @@ class Character {
     }
     
     moveTowards(targetPos) {
-        // Check distance from platform center to avoid running off edge
+        // ENHANCED platform edge avoidance - stay well away from edges
         const distFromCenter = Math.sqrt(
             Math.pow(this.body.position.x, 2) + Math.pow(this.body.position.z, 2)
         );
@@ -870,8 +973,8 @@ class Character {
         direction.y = 0; // Don't move vertically
         direction.normalize();
         
-        // If too close to edge, blend in center-seeking force
-        if (distFromCenter > 11) {
+        // STRONGER edge avoidance - start avoiding at 10 units from center
+        if (distFromCenter > 10) {
             const toCenterDirection = new CANNON.Vec3(
                 -this.body.position.x,
                 0,
@@ -879,24 +982,30 @@ class Character {
             );
             toCenterDirection.normalize();
             
-            // Blend forces: more toward center as we get closer to edge
-            const centerWeight = Math.min((distFromCenter - 11) / 3, 1); // 0 to 1 as dist goes from 11 to 14
+            // Much stronger center-seeking as we approach edge
+            const centerWeight = Math.min((distFromCenter - 10) / 2, 1); // 0 to 1 as dist goes from 10 to 12
             const targetWeight = 1 - centerWeight;
             
             direction.x = direction.x * targetWeight + toCenterDirection.x * centerWeight;
             direction.z = direction.z * targetWeight + toCenterDirection.z * centerWeight;
             direction.normalize();
+            
+            // STOP completely if too close to edge (emergency brake)
+            if (distFromCenter > 13) {
+                direction.copy(toCenterDirection);
+            }
         }
         
         // Apply force at the center of mass for better balance
-        const force = direction.scale(700 * this.speed); // Even stronger force for faster movement
+        // REDUCED force for slower, more realistic cartoon movement
+        const force = direction.scale(400 * this.speed); // Reduced from 700 for slower movement
         this.body.applyForce(force, this.body.position);
         
         // Wake up the body if it's sleeping
         this.body.wakeUp();
         
-        // Limit speed
-        const maxSpeed = 25 * this.speed; // Higher max speed for more dynamic action
+        // REDUCED max speed for more realistic, cartoon-like movement
+        const maxSpeed = 12 * this.speed; // Reduced from 25 for slower movement
         const velocity = this.body.velocity;
         const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         
@@ -942,14 +1051,15 @@ class Character {
             const hitDistance = this.body.position.distanceTo(target.body.position);
             
             if (hitDistance < 5.0) {
-                // HIT! Apply MUCH STRONGER force to target
+                // HIT! Apply REALISTIC force - no flying away
                 const direction = new CANNON.Vec3();
                 direction.copy(target.body.position);
                 direction.vsub(this.body.position);
-                direction.y = 0.5; // Upward angle for dramatic launch
+                direction.y = 0.2; // Slight upward angle for realistic impact
                 direction.normalize();
                 
-                const force = direction.scale(500 * this.strength); // Much stronger impact
+                // REDUCED force for realistic punch - characters have real weight
+                const force = direction.scale(150 * this.strength); // Much reduced from 500
                 target.body.applyImpulse(force, target.body.position);
                 
                 // Apply impact reaction to target
@@ -978,8 +1088,8 @@ class Character {
                     }, 200);
                 }
                 
-                // Bigger recoil to puncher for comedy
-                const recoil = direction.scale(-30);
+                // REDUCED recoil for more realistic punch
+                const recoil = direction.scale(-15); // Reduced from -30
                 this.body.applyImpulse(recoil, this.body.position);
             } else {
                 // Missed! Just play animation
@@ -1016,15 +1126,16 @@ class Character {
         setTimeout(() => {
             if (!this.isAlive || !target.isAlive) return;
             
-            // Lunge forward with head
-            const lungeForce = direction.scale(400 * this.strength);
+            // Lunge forward with head - REDUCED force for realistic movement
+            const lungeForce = direction.scale(200 * this.strength); // Reduced from 400
             this.body.applyImpulse(lungeForce, this.body.position);
             
             // Check if hit (collision-based detection)
             const dist = this.body.position.distanceTo(target.body.position);
             if (dist < 4) {
-                const headbuttForce = direction.scale(350 * this.strength);
-                headbuttForce.y = 80;
+                // REALISTIC headbutt force - no flying away
+                const headbuttForce = direction.scale(120 * this.strength); // Reduced from 350
+                headbuttForce.y = 30; // Reduced from 80
                 target.body.applyImpulse(headbuttForce, target.body.position);
                 target.takeDamage(25 * this.strength);
                 target.reactToHit(direction);
@@ -1052,8 +1163,8 @@ class Character {
     
     jumpAttack(target) {
         // Jumping punch attack (Party Animals style)
-        // Jump up first
-        this.body.velocity.y = 12;
+        // Jump up first - REDUCED for realistic movement
+        this.body.velocity.y = 8; // Reduced from 12
         
         // Both arms raised
         if (this.leftArm && this.rightArm) {
@@ -1074,7 +1185,8 @@ class Character {
             
             const dist = this.body.position.distanceTo(target.body.position);
             if (dist < 5) {
-                const slamForce = direction.scale(400 * this.strength);
+                // REALISTIC slam force - no flying away
+                const slamForce = direction.scale(180 * this.strength); // Reduced from 400
                 target.body.applyImpulse(slamForce, target.body.position);
                 target.takeDamage(30 * this.strength);
                 target.reactToHit(direction);
@@ -1098,14 +1210,14 @@ class Character {
     }
     
     reactToHit(hitDirection) {
-        // MUCH MORE DRAMATIC impact reaction (Party Animals/Gang Beasts style)
+        // REALISTIC impact reaction - characters don't fly away
         this.lastHitTime = Date.now();
         this.isStunned = true;
         
-        // HUGE flail arms on impact (very comedic effect)
+        // Realistic arm flail on impact (reduced exaggeration)
         if (this.leftArm && this.rightArm) {
-            this.leftArm.rotation.x = 2.0; // Much bigger flail
-            this.rightArm.rotation.x = 2.0;
+            this.leftArm.rotation.x = 1.2; // Reduced from 2.0
+            this.rightArm.rotation.x = 1.2;
             this.leftArm.rotation.z = Math.PI / 2;
             this.rightArm.rotation.z = -Math.PI / 2;
             
@@ -1133,13 +1245,19 @@ class Character {
             }, 400);
         }
         
-        // Add MUCH MORE spinning effect if hit hard
+        // REDUCED spinning effect for realistic reaction
         const spinForce = new CANNON.Vec3(
-            (Math.random() - 0.5) * 8,
-            (Math.random() - 0.5) * 5,
-            (Math.random() - 0.5) * 8
+            (Math.random() - 0.5) * 2, // Reduced from 8
+            (Math.random() - 0.5) * 1, // Reduced from 5
+            (Math.random() - 0.5) * 2  // Reduced from 8
         );
         this.body.angularVelocity.vadd(spinForce, this.body.angularVelocity);
+        
+        // Add spring reaction to head physics
+        if (this.headPhysics) {
+            this.headPhysics.velocity.x += hitDirection.x * this.springConstants.headReaction;
+            this.headPhysics.velocity.z += hitDirection.z * this.springConstants.headReaction;
+        }
     }
     
     dropkick(target) {
@@ -1163,8 +1281,8 @@ class Character {
         setTimeout(() => {
             if (!this.isAlive) return;
             
-            // HUGE jump and dramatic launch
-            this.body.velocity.y = 18; // Much higher jump for more air time
+            // REALISTIC jump - not too high
+            this.body.velocity.y = 10; // Reduced from 18 for more realistic movement
             
             const direction = new CANNON.Vec3();
             direction.copy(target.body.position);
@@ -1172,8 +1290,8 @@ class Character {
             direction.y = 0;
             direction.normalize();
             
-            // Apply MUCH STRONGER force to self for dramatic forward momentum
-            const selfForce = direction.scale(400);
+            // Apply REALISTIC forward momentum
+            const selfForce = direction.scale(200); // Reduced from 400
             this.body.applyImpulse(selfForce, this.body.position);
             
             // FULL LEG EXTENSION for kick animation (very visible)
@@ -1196,8 +1314,8 @@ class Character {
                 this.rightArm.rotation.z = -Math.PI / 6;
             }
             
-            // Spinning during flight for comedy
-            this.body.angularVelocity.y = 3;
+            // Reduced spinning for realistic movement
+            this.body.angularVelocity.y = 1.5; // Reduced from 3
             
             // Apply force to target if close enough (mid-air collision)
             setTimeout(() => {
@@ -1205,8 +1323,9 @@ class Character {
                 
                 const distance = this.body.position.distanceTo(target.body.position);
                 if (distance < 5.5) {
-                    const targetForce = direction.scale(700 * this.strength); // MUCH MORE powerful kick
-                    targetForce.y = 250; // HUGE vertical launch
+                    // REALISTIC kick force - no excessive flying
+                    const targetForce = direction.scale(250 * this.strength); // Much reduced from 700
+                    targetForce.y = 80; // Reduced from 250
                     target.body.applyImpulse(targetForce, target.body.position);
                     target.takeDamage(35 * this.strength);
                     target.reactToHit(direction);
@@ -1214,11 +1333,11 @@ class Character {
                     // Visual effect
                     this.showHitEffect(target.body.position, 'KICK!');
                     
-                    // Add MASSIVE spin to target for comedy
+                    // REDUCED spin for realistic reaction
                     target.body.angularVelocity.set(
-                        (Math.random() - 0.5) * 20,
-                        (Math.random() - 0.5) * 10,
-                        (Math.random() - 0.5) * 20
+                        (Math.random() - 0.5) * 5, // Reduced from 20
+                        (Math.random() - 0.5) * 3, // Reduced from 10
+                        (Math.random() - 0.5) * 5  // Reduced from 20
                     );
                 }
                 
@@ -1316,12 +1435,16 @@ class Character {
         this.mesh.material.transparent = true;
         this.changeAIState('idle');
         
-        // Dramatic knockout reaction - big spin and fall
+        // REALISTIC knockout reaction - fall naturally to ground
+        // Much reduced spin for realistic fall
         this.body.angularVelocity.set(
-            (Math.random() - 0.5) * 15,
-            (Math.random() - 0.5) * 8,
-            (Math.random() - 0.5) * 15
+            (Math.random() - 0.5) * 3, // Reduced from 15
+            (Math.random() - 0.5) * 2, // Reduced from 8
+            (Math.random() - 0.5) * 3  // Reduced from 15
         );
+        
+        // Ensure character falls down, not fly away
+        this.body.velocity.y = Math.min(this.body.velocity.y, 2);
         
         // Show knockout stars effect
         this.showKnockoutEffect();
@@ -1469,7 +1592,7 @@ class Character {
         setTimeout(() => {
             if (!this.grabbedTarget) return;
             
-            // Apply strong throwing force
+            // Apply REALISTIC throwing force - not excessive
             const throwDirection = new CANNON.Vec3(
                 this.body.position.x > 0 ? 1.5 : -1.5,
                 -0.3,
@@ -1477,14 +1600,14 @@ class Character {
             );
             throwDirection.normalize();
             
-            const throwForce = throwDirection.scale(600); // Even stronger throw
+            const throwForce = throwDirection.scale(300); // Reduced from 600 for realistic throw
             this.grabbedTarget.body.applyImpulse(throwForce, this.grabbedTarget.body.position);
             
-            // Add MORE spin for comedic effect
+            // Add REALISTIC spin for natural throw
             this.grabbedTarget.body.angularVelocity.set(
-                (Math.random() - 0.5) * 20,
-                (Math.random() - 0.5) * 15,
-                (Math.random() - 0.5) * 20
+                (Math.random() - 0.5) * 6, // Reduced from 20
+                (Math.random() - 0.5) * 4, // Reduced from 15
+                (Math.random() - 0.5) * 6  // Reduced from 20
             );
             
             // Throwing animation follow-through
@@ -1518,19 +1641,19 @@ class Character {
     }
     
     breakFree() {
-        // Apply BIGGER force to push away from grabber - very dramatic escape!
+        // Apply REALISTIC force to push away from grabber
         const escapeForce = new CANNON.Vec3(
-            (Math.random() - 0.5) * 300, // Stronger horizontal escape
-            200, // Higher jump on escape
-            (Math.random() - 0.5) * 300
+            (Math.random() - 0.5) * 150, // Reduced from 300
+            100, // Reduced from 200
+            (Math.random() - 0.5) * 150  // Reduced from 300
         );
         this.body.applyImpulse(escapeForce, this.body.position);
         
-        // Add spin for dramatic effect
+        // Add REALISTIC spin for natural escape
         this.body.angularVelocity.set(
-            (Math.random() - 0.5) * 10,
-            (Math.random() - 0.5) * 5,
-            (Math.random() - 0.5) * 10
+            (Math.random() - 0.5) * 4, // Reduced from 10
+            (Math.random() - 0.5) * 2, // Reduced from 5
+            (Math.random() - 0.5) * 4  // Reduced from 10
         );
         
         this.isGrabbed = false;
