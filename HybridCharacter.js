@@ -55,7 +55,7 @@ class HybridCharacter {
         const color = this.team === 'blue' ? 0x4A90E2 : 0xE24A4A;
         const spawnX = this.team === 'blue' ? -8 : 8;
         const spawnZ = 0;
-        const spawnY = 0; // Spawn on ground level (-4 is platform, + 1.5 for height = -2.5, but visual offset)
+        const spawnY = -3.1; // Platform top is at -4, character bottom at about -3.1
         
         // === SELF-BALANCING CAPSULE (Torso + Hips) ===
         // This is the main body that stays balanced
@@ -85,7 +85,7 @@ class HybridCharacter {
         // === HEAD (attached to capsule) ===
         const headShape = new CANNON.Sphere(0.35);
         const headBody = new CANNON.Body({
-            mass: 1.2, // Reduced mass for less momentum
+            mass: 2.5, // Increased mass for more stability and less bobbing
             shape: headShape,
             position: new CANNON.Vec3(spawnX, spawnY + 1.3, spawnZ),
             linearDamping: 0.8, // Much higher damping for stability
@@ -281,7 +281,7 @@ class HybridCharacter {
     }
     
     setupAI() {
-        this.aiThinkInterval = 30;
+        this.aiThinkInterval = 20; // Reduced from 30 for more responsive AI
         this.aiThinkCounter = 0;
     }
     
@@ -360,26 +360,33 @@ class HybridCharacter {
         
         const torso = this.bodies.torso;
         
-        // Ground contact detection - only apply upward force if on ground
-        const isOnGround = torso.position.y < -2.5; // Platform is at -5, character bottom at ~-3.5
+        // Platform is at y=-5 with height 2, so top surface is at y=-4
+        // Character torso cylinder is 1.8 tall, so center should be at about y=-3.1
+        const platformTop = -4;
+        const characterHalfHeight = 0.9; // Half of torso height
+        const targetHeight = platformTop + characterHalfHeight; // -3.1
         
-        // Keep capsule at proper height with gentle stabilization (not jumping)
-        const targetHeight = -3.1; // Just above platform surface
+        // Ground contact detection - check if character is near platform
+        const isOnGround = torso.position.y < targetHeight + 0.5;
+        
         const heightDiff = targetHeight - torso.position.y;
         
-        if (isOnGround && heightDiff > 0.1) {
-            // Only apply force if significantly below target
-            const upForce = heightDiff * 300 * this.speed;
+        if (isOnGround && heightDiff > 0.05) {
+            // Apply upward force if below target - stronger to prevent sinking
+            const upForce = heightDiff * 500 * this.speed;
             torso.applyForce(new CANNON.Vec3(0, upForce, 0), torso.position);
-        } else if (heightDiff < -0.1) {
-            // Apply downward force if too high (prevent jumping)
-            const downForce = heightDiff * 200;
+        } else if (heightDiff < -0.05) {
+            // Apply downward force if too high (prevent floating)
+            const downForce = heightDiff * 300;
             torso.applyForce(new CANNON.Vec3(0, downForce, 0), torso.position);
         }
         
-        // Limit vertical velocity to prevent jumping/bouncing
-        if (torso.velocity.y > 2) {
-            torso.velocity.y = 2;
+        // Strongly limit vertical velocity to prevent jumping/bouncing
+        if (torso.velocity.y > 1) {
+            torso.velocity.y = 1;
+        }
+        if (torso.velocity.y < -3) {
+            torso.velocity.y = -3; // Limit fall speed too
         }
         
         // Strong angular damping to keep upright
@@ -453,18 +460,18 @@ class HybridCharacter {
             if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
                 this.currentAnimation = 'walking';
             }
-            this.legPhase += deltaTime * 8; // Slightly faster walking cycle
+            this.legPhase += deltaTime * 10; // Increased speed for more visible walking
             
-            // More natural leg swing with hip rotation
-            const leftLegSwing = Math.sin(this.legPhase) * 0.5;
-            const rightLegSwing = Math.sin(this.legPhase + Math.PI) * 0.5;
+            // More pronounced leg swing with hip rotation
+            const leftLegSwing = Math.sin(this.legPhase) * 0.7; // Increased amplitude
+            const rightLegSwing = Math.sin(this.legPhase + Math.PI) * 0.7;
             
             // Position legs relative to torso
             const torsoPos = torso.position;
             
-            // Calculate foot lift height based on swing phase
-            const leftFootLift = Math.max(0, Math.sin(this.legPhase)) * 0.3;
-            const rightFootLift = Math.max(0, Math.sin(this.legPhase + Math.PI)) * 0.3;
+            // Calculate foot lift height based on swing phase - more pronounced
+            const leftFootLift = Math.max(0, Math.sin(this.legPhase)) * 0.4; // Increased lift
+            const rightFootLift = Math.max(0, Math.sin(this.legPhase + Math.PI)) * 0.4;
             
             // Left upper leg - connected to hip
             this.meshes.leftUpperLeg.position.set(
@@ -472,25 +479,25 @@ class HybridCharacter {
                 torsoPos.y - 0.45,
                 torsoPos.z
             );
-            this.meshes.leftUpperLeg.rotation.x = leftLegSwing * 0.8;
+            this.meshes.leftUpperLeg.rotation.x = leftLegSwing;
             
-            // Left lower leg - bends naturally at knee
-            const leftKneeBend = Math.max(0, -leftLegSwing * 1.2);
+            // Left lower leg - bends naturally at knee with more pronounced motion
+            const leftKneeBend = Math.max(0, -leftLegSwing * 1.5); // Increased knee bend
             this.meshes.leftLowerLeg.position.set(
                 torsoPos.x - 0.2,
                 torsoPos.y - 1.35 + leftFootLift * 0.3,
-                torsoPos.z + Math.sin(this.legPhase) * 0.15
+                torsoPos.z + Math.sin(this.legPhase) * 0.2 // Increased forward motion
             );
             this.meshes.leftLowerLeg.rotation.x = leftKneeBend;
             
             // Left foot - stays flat on ground when planted
-            const leftFootZ = Math.sin(this.legPhase) * 0.25;
+            const leftFootZ = Math.sin(this.legPhase) * 0.35; // Increased stride
             this.meshes.leftFoot.position.set(
                 torsoPos.x - 0.2,
                 torsoPos.y - 2.0 + leftFootLift,
                 torsoPos.z + leftFootZ
             );
-            this.meshes.leftFoot.rotation.x = leftKneeBend * 0.3; // Slight angle for natural walk
+            this.meshes.leftFoot.rotation.x = leftKneeBend * 0.3;
             
             // Right upper leg - opposite phase
             this.meshes.rightUpperLeg.position.set(
@@ -498,40 +505,41 @@ class HybridCharacter {
                 torsoPos.y - 0.45,
                 torsoPos.z
             );
-            this.meshes.rightUpperLeg.rotation.x = rightLegSwing * 0.8;
+            this.meshes.rightUpperLeg.rotation.x = rightLegSwing;
             
-            // Right lower leg - bends naturally at knee
-            const rightKneeBend = Math.max(0, -rightLegSwing * 1.2);
+            // Right lower leg - bends naturally at knee with more pronounced motion
+            const rightKneeBend = Math.max(0, -rightLegSwing * 1.5); // Increased knee bend
             this.meshes.rightLowerLeg.position.set(
                 torsoPos.x + 0.2,
                 torsoPos.y - 1.35 + rightFootLift * 0.3,
-                torsoPos.z + Math.sin(this.legPhase + Math.PI) * 0.15
+                torsoPos.z + Math.sin(this.legPhase + Math.PI) * 0.2 // Increased forward motion
             );
             this.meshes.rightLowerLeg.rotation.x = rightKneeBend;
             
             // Right foot - stays flat on ground when planted
-            const rightFootZ = Math.sin(this.legPhase + Math.PI) * 0.25;
+            const rightFootZ = Math.sin(this.legPhase + Math.PI) * 0.35; // Increased stride
             this.meshes.rightFoot.position.set(
                 torsoPos.x + 0.2,
                 torsoPos.y - 2.0 + rightFootLift,
                 torsoPos.z + rightFootZ
             );
-            this.meshes.rightFoot.rotation.x = rightKneeBend * 0.3; // Slight angle for natural walk
+            this.meshes.rightFoot.rotation.x = rightKneeBend * 0.3;
         } else if (!this.isKnockedOut) {
-            // Idle - legs in neutral position with slight breathing motion
+            // Idle - legs in neutral position
             if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
                 this.currentAnimation = 'idle';
             }
             const torsoPos = torso.position;
             
-            // Smoothly return to neutral
+            // Smoothly return to neutral standing position
             this.meshes.leftUpperLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 0.45, torsoPos.z);
             this.meshes.leftUpperLeg.rotation.x *= 0.9;
             
             this.meshes.leftLowerLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 1.35, torsoPos.z);
             this.meshes.leftLowerLeg.rotation.x *= 0.9;
             
-            this.meshes.leftFoot.position.set(torsoPos.x - 0.2, torsoPos.y - 1.9, torsoPos.z);
+            this.meshes.leftFoot.position.set(torsoPos.x - 0.2, torsoPos.y - 2.0, torsoPos.z);
+            this.meshes.leftFoot.rotation.x *= 0.9;
             
             this.meshes.rightUpperLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 0.45, torsoPos.z);
             this.meshes.rightUpperLeg.rotation.x *= 0.9;
@@ -539,7 +547,8 @@ class HybridCharacter {
             this.meshes.rightLowerLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 1.35, torsoPos.z);
             this.meshes.rightLowerLeg.rotation.x *= 0.9;
             
-            this.meshes.rightFoot.position.set(torsoPos.x + 0.2, torsoPos.y - 1.9, torsoPos.z);
+            this.meshes.rightFoot.position.set(torsoPos.x + 0.2, torsoPos.y - 2.0, torsoPos.z);
+            this.meshes.rightFoot.rotation.x *= 0.9;
         }
     }
     
@@ -675,12 +684,48 @@ class HybridCharacter {
         const distance = direction.length();
         direction.normalize();
         
-        // Apply horizontal force only to move - no upward force
-        const moveForce = 120 * this.speed; // Reduced force for smoother movement
-        this.body.applyForce(
-            new CANNON.Vec3(direction.x * moveForce, 0, direction.z * moveForce),
-            this.body.position
+        // Check distance from platform center to avoid falling off
+        const platformRadius = 14; // Platform is 30x30, stay within safe radius
+        const distFromCenter = Math.sqrt(
+            this.body.position.x * this.body.position.x +
+            this.body.position.z * this.body.position.z
         );
+        
+        // If near edge, apply force toward center
+        if (distFromCenter > platformRadius) {
+            const centerDirection = new CANNON.Vec3(
+                -this.body.position.x,
+                0,
+                -this.body.position.z
+            );
+            centerDirection.normalize();
+            
+            // Strong force to push back from edge
+            const pushForce = 200;
+            this.body.applyForce(
+                new CANNON.Vec3(centerDirection.x * pushForce, 0, centerDirection.z * pushForce),
+                this.body.position
+            );
+            
+            // Also dampen velocity toward edge
+            const velocityTowardEdge = 
+                this.body.velocity.x * this.body.position.x +
+                this.body.velocity.z * this.body.position.z;
+            
+            if (velocityTowardEdge > 0) {
+                // Moving toward edge, slow down
+                this.body.velocity.x *= 0.7;
+                this.body.velocity.z *= 0.7;
+            }
+        } else {
+            // Safe to move normally
+            // Apply horizontal force only to move - no upward force
+            const moveForce = 120 * this.speed;
+            this.body.applyForce(
+                new CANNON.Vec3(direction.x * moveForce, 0, direction.z * moveForce),
+                this.body.position
+            );
+        }
         
         // Limit horizontal velocity to prevent excessive speed
         const maxSpeed = 4;
