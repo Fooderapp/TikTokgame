@@ -291,6 +291,7 @@ class HybridCharacter {
         
         // Handle attack timers
         if (this.punchTimer > 0) {
+            this.updatePunchAnimation();
             this.punchTimer--;
             if (this.punchTimer === 0 && this.punchHitPos && this.isAlive) {
                 this.checkHit(this.punchHitPos, 2.0, 20);
@@ -408,12 +409,12 @@ class HybridCharacter {
             ['leftUpperArm', 'rightUpperArm', 'leftForearm', 'rightForearm', 'leftHand', 'rightHand'].forEach(part => {
                 if (this.bodies[part]) {
                     // Much stronger damping for idle arms
-                    this.bodies[part].angularVelocity.scale(0.5, this.bodies[part].angularVelocity);
-                    this.bodies[part].velocity.scale(0.7, this.bodies[part].velocity);
+                    this.bodies[part].angularVelocity.scale(0.3, this.bodies[part].angularVelocity);
+                    this.bodies[part].velocity.scale(0.5, this.bodies[part].velocity);
                 }
             });
             
-            // Apply gentle forces to keep arms near rest position
+            // Apply stronger forces to keep arms near rest position
             const leftArm = this.bodies.leftUpperArm;
             const rightArm = this.bodies.rightUpperArm;
             if (leftArm && rightArm) {
@@ -429,8 +430,8 @@ class HybridCharacter {
                     torso.position.z
                 );
                 
-                // Apply gentle return force
-                const returnForce = 15;
+                // Apply stronger return force for better stability
+                const returnForce = 25; // Increased from 15
                 const leftDiff = new CANNON.Vec3();
                 targetLeftPos.vsub(leftArm.position, leftDiff);
                 leftArm.applyForce(leftDiff.scale(returnForce), leftArm.position);
@@ -444,8 +445,8 @@ class HybridCharacter {
         // Keep head stable by applying forces to align with torso
         const head = this.bodies.head;
         if (head && this.currentAnimation !== 'knockout') {
-            head.angularVelocity.scale(0.4, head.angularVelocity);
-            head.velocity.scale(0.8, head.velocity);
+            head.angularVelocity.scale(0.2, head.angularVelocity); // Increased damping from 0.4
+            head.velocity.scale(0.6, head.velocity); // Increased damping from 0.8
         }
     }
     
@@ -861,40 +862,63 @@ class HybridCharacter {
         this.currentAnimation = 'punching';
         this.punchTimer = 15; // ~250ms at 60fps for more realistic wind-up
         
-        // Boxing-style punch with wind-up
+        // Store direction for animation
+        const direction = new CANNON.Vec3(0, 0, 1);
+        this.body.quaternion.vmult(direction, direction);
+        this.punchDirection = direction.clone();
+        
+        // Store position for hit check (will be updated during animation)
+        this.punchHitPos = this.bodies.rightHand.position.clone();
+    }
+    
+    updatePunchAnimation() {
+        // Boxing-style punch with wind-up throughout the animation
         const hand = this.bodies.rightHand;
         const forearm = this.bodies.rightForearm;
         const upperArm = this.bodies.rightUpperArm;
         
-        // Get direction character is facing
-        const direction = new CANNON.Vec3(0, 0, 1);
-        this.body.quaternion.vmult(direction, direction);
+        if (!hand || !forearm || !upperArm || !this.punchDirection) return;
         
-        // Wind-up phase - pull arm back first (frames 0-5)
+        const direction = this.punchDirection;
+        
+        // Wind-up phase - pull arm back (frames 15-10)
         if (this.punchTimer > 10) {
-            const pullBackForce = 200;
+            const pullBackForce = 250;
             hand.applyForce(
                 new CANNON.Vec3(-direction.x * pullBackForce, 0, -direction.z * pullBackForce),
                 hand.position
             );
-        } else {
-            // Punch extension phase - explosive forward motion (frames 6-15)
-            const punchForce = 800 * this.strength;
+            forearm.applyForce(
+                new CANNON.Vec3(-direction.x * pullBackForce * 0.5, 0, -direction.z * pullBackForce * 0.5),
+                forearm.position
+            );
+        } 
+        // Punch extension phase - explosive forward motion (frames 10-0)
+        else {
+            const punchForce = 600 * this.strength;
             hand.applyForce(
-                new CANNON.Vec3(direction.x * punchForce, 50, direction.z * punchForce),
+                new CANNON.Vec3(direction.x * punchForce, 20, direction.z * punchForce),
                 hand.position
             );
             forearm.applyForce(
-                new CANNON.Vec3(direction.x * punchForce * 0.6, 0, direction.z * punchForce * 0.6),
+                new CANNON.Vec3(direction.x * punchForce * 0.5, 0, direction.z * punchForce * 0.5),
                 forearm.position
+            );
+            upperArm.applyForce(
+                new CANNON.Vec3(direction.x * punchForce * 0.3, 0, direction.z * punchForce * 0.3),
+                upperArm.position
             );
         }
         
-        // Add body rotation for power
-        this.body.angularVelocity.y += 0.3;
+        // Very slight body rotation for power - minimal to avoid flying
+        if (this.punchTimer > 10) {
+            this.body.angularVelocity.y += 0.05;
+        }
         
-        // Store position for hit check (at peak extension)
-        this.punchHitPos = hand.position.clone();
+        // Update hit position for peak extension
+        if (this.punchTimer === 5) {
+            this.punchHitPos = hand.position.clone();
+        }
     }
     
     dropkick() {
@@ -947,16 +971,16 @@ class HybridCharacter {
     takeDamage(amount, sourcePos) {
         this.health -= amount;
         
-        // Apply knockback based on damage type
+        // Apply knockback based on damage type - REDUCED to prevent flying
         const direction = new CANNON.Vec3();
         this.body.position.vsub(sourcePos, direction);
         direction.y = 0; // Horizontal direction
         direction.normalize();
         
-        // More realistic knockback - horizontal push with slight upward component
-        const knockbackStrength = amount / 20; // Normalized (1.0 for punch, 1.75 for kick)
-        const horizontalForce = 500 * knockbackStrength * this.strength;
-        const upwardForce = 200 * knockbackStrength;
+        // Much lighter knockback - character should swing back, not fly
+        const knockbackStrength = amount / 30; // Reduced from /20 to /30
+        const horizontalForce = 250 * knockbackStrength * this.strength; // Reduced from 500
+        const upwardForce = 80 * knockbackStrength; // Reduced from 200
         
         this.body.applyImpulse(
             new CANNON.Vec3(
@@ -967,8 +991,8 @@ class HybridCharacter {
             this.body.position
         );
         
-        // Add slight rotation from impact
-        const spinForce = knockbackStrength * 2;
+        // Minimal rotation from impact - just a slight swing
+        const spinForce = knockbackStrength * 0.5; // Reduced from 2
         this.body.angularVelocity.x += (Math.random() - 0.5) * spinForce;
         this.body.angularVelocity.z += (Math.random() - 0.5) * spinForce;
         

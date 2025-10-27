@@ -363,9 +363,11 @@ class Game {
                 char.update();
             }
             
-            // Remove dead characters that fell off
+            // Remove and destroy characters that fell off platform
             if (char.body.position.y < -40 && char.isAlive) {
                 char.die();
+                char.destroy();
+                this.characters.splice(i, 1);
                 this.updateCharacterCount();
                 this.checkRoundEnd();
             }
