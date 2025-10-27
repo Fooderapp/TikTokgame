@@ -377,8 +377,8 @@ class HybridCharacter {
             torso.applyForce(new CANNON.Vec3(0, upForce, 0), torso.position);
         } else if (heightDiff < -0.05) {
             // Apply downward force if too high (prevent floating)
-            const downForce = heightDiff * 250; // Moderate downward force
-            torso.applyForce(new CANNON.Vec3(0, downForce, 0), torso.position);
+            const downForce = -heightDiff * 250; // Moderate downward force (heightDiff is negative)
+            torso.applyForce(new CANNON.Vec3(0, -downForce, 0), torso.position);
         }
         
         // Strongly limit vertical velocity to prevent jumping/bouncing
