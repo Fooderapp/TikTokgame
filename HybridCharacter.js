@@ -64,11 +64,11 @@ class HybridCharacter {
             mass: 10, // Increased mass for better ground contact
             shape: capsuleShape,
             position: new CANNON.Vec3(spawnX, spawnY, spawnZ),
-            linearDamping: 0.5, // Increased damping to prevent sliding
-            angularDamping: 0.95 // Much higher to prevent spinning
+            linearDamping: 0.3, // Reduced damping to allow movement
+            angularDamping: 0.9 // High enough to prevent spinning but allow turning
         });
         capsuleBody.material = new CANNON.Material();
-        capsuleBody.material.friction = 1.0; // Maximum friction for no sliding
+        capsuleBody.material.friction = 0.6; // Moderate friction for movement and stability
         capsuleBody.material.restitution = 0.0; // No bounce
         this.game.world.addBody(capsuleBody);
         this.bodies.torso = capsuleBody;
@@ -373,11 +373,11 @@ class HybridCharacter {
         
         if (isOnGround && heightDiff > 0.05) {
             // Apply upward force if below target - stronger to prevent sinking
-            const upForce = heightDiff * 500 * this.speed;
+            const upForce = heightDiff * 600 * this.speed; // Stronger force to stand up
             torso.applyForce(new CANNON.Vec3(0, upForce, 0), torso.position);
         } else if (heightDiff < -0.05) {
             // Apply downward force if too high (prevent floating)
-            const downForce = heightDiff * 300;
+            const downForce = heightDiff * 250; // Moderate downward force
             torso.applyForce(new CANNON.Vec3(0, downForce, 0), torso.position);
         }
         
@@ -397,7 +397,7 @@ class HybridCharacter {
         uprightQuat.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
         
         // Blend towards upright
-        const blendFactor = 0.15; // Stronger correction
+        const blendFactor = 0.08; // Gentler correction to avoid overcorrection
         torso.quaternion.x = torso.quaternion.x * (1 - blendFactor) + uprightQuat.x * blendFactor;
         torso.quaternion.z = torso.quaternion.z * (1 - blendFactor) + uprightQuat.z * blendFactor;
         torso.quaternion.normalize();
@@ -720,7 +720,7 @@ class HybridCharacter {
         } else {
             // Safe to move normally
             // Apply horizontal force only to move - no upward force
-            const moveForce = 120 * this.speed;
+            const moveForce = 250 * this.speed; // Increased force for reliable movement
             this.body.applyForce(
                 new CANNON.Vec3(direction.x * moveForce, 0, direction.z * moveForce),
                 this.body.position
@@ -728,7 +728,7 @@ class HybridCharacter {
         }
         
         // Limit horizontal velocity to prevent excessive speed
-        const maxSpeed = 4;
+        const maxSpeed = 5; // Increased for better movement feel
         const horizontalVel = Math.sqrt(this.body.velocity.x ** 2 + this.body.velocity.z ** 2);
         if (horizontalVel > maxSpeed) {
             const scale = maxSpeed / horizontalVel;
