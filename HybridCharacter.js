@@ -953,7 +953,40 @@ class HybridCharacter {
             return;
         }
         
-        // Choose attack
+        // Boxing footwork - circle around opponent when in range
+        if (distance > 2.5 && distance < 4.5 && this.punchTimer === 0 && this.kickTimer === 0) {
+            const direction = new CANNON.Vec3();
+            this.aiTarget.body.position.vsub(this.body.position, direction);
+            direction.y = 0;
+            direction.normalize();
+            
+            // Get perpendicular direction for circling
+            const circleDir = new CANNON.Vec3(-direction.z, 0, direction.x);
+            
+            // Randomly circle left or right
+            const circleDirection = Math.random() > 0.5 ? 1 : -1;
+            circleDir.scale(circleDirection, circleDir);
+            
+            // Apply lateral movement force (boxing footwork)
+            const lateralForce = 150 * this.speed;
+            this.body.applyForce(
+                new CANNON.Vec3(circleDir.x * lateralForce, 0, circleDir.z * lateralForce),
+                this.body.position
+            );
+            
+            // Also move slightly forward/backward randomly
+            const approachRetreat = (Math.random() - 0.5) * 0.3;
+            this.body.applyForce(
+                new CANNON.Vec3(direction.x * lateralForce * approachRetreat, 0, direction.z * lateralForce * approachRetreat),
+                this.body.position
+            );
+            
+            // Keep facing opponent while circling
+            const targetAngle = Math.atan2(direction.x, direction.z);
+            this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), targetAngle);
+        }
+        
+        // Choose attack when in close range
         if (Math.random() < 0.65) {
             this.punch();
         } else {
@@ -1350,6 +1383,39 @@ class HybridCharacter {
         if (this.health <= 0 && !this.isKnockedOut) {
             this.knockout();
         }
+        
+        // Small chance to dodge/slip punches when in boxing stance
+        if (this.boxingStance && Math.random() < 0.15 && !this.isKnockedOut) {
+            this.performSlip();
+        }
+    }
+    
+    performSlip() {
+        // Boxing slip/dodge movement - quick lateral head movement
+        if (!this.bodies.head || this.punchTimer > 0 || this.kickTimer > 0) return;
+        
+        // Quick slip to the side
+        const slipDirection = Math.random() > 0.5 ? 1 : -1;
+        const slipForce = 300;
+        
+        // Get facing direction
+        const forward = new CANNON.Vec3(0, 0, 1);
+        this.body.quaternion.vmult(forward, forward);
+        
+        // Perpendicular for slip
+        const slipDir = new CANNON.Vec3(-forward.z * slipDirection, 0, forward.x * slipDirection);
+        
+        // Quick head movement
+        this.bodies.head.applyImpulse(
+            new CANNON.Vec3(slipDir.x * slipForce, 0, slipDir.z * slipForce),
+            this.bodies.head.position
+        );
+        
+        // Slight body lean
+        this.body.applyImpulse(
+            new CANNON.Vec3(slipDir.x * 50, 0, slipDir.z * 50),
+            this.body.position
+        );
     }
     
     knockout() {
