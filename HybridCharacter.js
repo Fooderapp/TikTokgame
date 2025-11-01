@@ -47,6 +47,11 @@ class HybridCharacter {
         this.comboCount = 0; // Track combo punches
         this.lastPunchTime = 0;
         
+        // Boxing constants
+        this.SLIP_PROBABILITY = 0.15; // 15% chance to slip/dodge when taking damage
+        this.HIT_TIMING_FACTOR = 0.6; // Hit detection occurs at 60% through punch animation
+        this.LATERAL_MOVEMENT_BASE_FORCE = 150; // Base force for circling/footwork
+        
         // Physics bodies - organized by function
         this.bodies = {};
         this.constraints = [];
@@ -968,7 +973,7 @@ class HybridCharacter {
             circleDir.scale(circleDirection, circleDir);
             
             // Apply lateral movement force (boxing footwork)
-            const lateralForce = 150 * this.speed;
+            const lateralForce = this.LATERAL_MOVEMENT_BASE_FORCE * this.speed;
             this.body.applyForce(
                 new CANNON.Vec3(circleDir.x * lateralForce, 0, circleDir.z * lateralForce),
                 this.body.position
@@ -1173,8 +1178,8 @@ class HybridCharacter {
                 this.animateCross(hand, forearm, upperArm, direction, halfTime);
         }
         
-        // Update hit position at peak extension
-        if (this.punchTimer === Math.floor(halfTime * 0.6)) {
+        // Update hit position at peak extension (60% through the punch for optimal timing)
+        if (this.punchTimer === Math.floor(halfTime * this.HIT_TIMING_FACTOR)) {
             this.punchHitPos = hand.position.clone();
         }
     }
@@ -1384,8 +1389,8 @@ class HybridCharacter {
             this.knockout();
         }
         
-        // Small chance to dodge/slip punches when in boxing stance
-        if (this.boxingStance && Math.random() < 0.15 && !this.isKnockedOut) {
+        // Chance to dodge/slip punches when in boxing stance (reactive defense)
+        if (this.boxingStance && Math.random() < this.SLIP_PROBABILITY && !this.isKnockedOut) {
             this.performSlip();
         }
     }
