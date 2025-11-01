@@ -37,6 +37,21 @@ class HybridCharacter {
         this.punchHitPos = null;
         this.kickDirection = null;
         
+        // Boxing movement system
+        this.boxingStance = true; // Boxing guard position
+        this.headBobTime = 0; // For head bobbing/weaving
+        this.footworkTime = 0; // For lateral footwork
+        this.isWeaving = false; // Head movement state
+        this.punchType = 'jab'; // jab, cross, hook, uppercut
+        this.isBlocking = false; // Defensive stance
+        this.comboCount = 0; // Track combo punches
+        this.lastPunchTime = 0;
+        
+        // Boxing constants
+        this.SLIP_PROBABILITY = 0.15; // 15% chance to slip/dodge when taking damage
+        this.HIT_TIMING_FACTOR = 0.6; // Hit detection occurs at 60% through punch animation
+        this.LATERAL_MOVEMENT_BASE_FORCE = 150; // Base force for circling/footwork
+        
         // Physics bodies - organized by function
         this.bodies = {};
         this.constraints = [];
@@ -294,7 +309,33 @@ class HybridCharacter {
             this.updatePunchAnimation();
             this.punchTimer--;
             if (this.punchTimer === 0 && this.punchHitPos && this.isAlive) {
-                this.checkHit(this.punchHitPos, 2.0, 20);
+                // Different damage and range for different punch types
+                let damage = 20;
+                let range = 2.0;
+                
+                switch (this.punchType) {
+                    case 'jab':
+                        damage = 15; // Fast but weak
+                        range = 2.2; // Good reach
+                        break;
+                    case 'cross':
+                        damage = 25; // Power punch
+                        range = 2.0;
+                        break;
+                    case 'hook':
+                        damage = 28; // High damage, wide swing
+                        range = 2.3;
+                        break;
+                    case 'uppercut':
+                        damage = 30; // Highest damage
+                        range = 1.8; // Shorter range
+                        break;
+                    default:
+                        damage = 20;
+                        range = 2.0;
+                }
+                
+                this.checkHit(this.punchHitPos, range, damage);
                 this.currentAnimation = 'idle';
                 this.punchHitPos = null;
             }
@@ -343,6 +384,7 @@ class HybridCharacter {
         } else if (this.isAlive) {
             // Active state - apply balance and AI
             this.applyBalanceForces();
+            this.updateBoxingGuard(); // Keep hands in guard position
             this.updateAI(deltaTime);
             this.updateAnimations(deltaTime);
             
@@ -526,30 +568,180 @@ class HybridCharacter {
             );
             this.meshes.rightFoot.rotation.x = rightKneeBend * 0.3;
         } else if (!this.isKnockedOut) {
-            // Idle - legs in neutral position
+            // Idle - Boxing stance with subtle movements
             if (this.currentAnimation !== 'punching' && this.currentAnimation !== 'kicking') {
                 this.currentAnimation = 'idle';
             }
             const torsoPos = torso.position;
             
-            // Smoothly return to neutral standing position
-            this.meshes.leftUpperLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 0.45, torsoPos.z);
-            this.meshes.leftUpperLeg.rotation.x *= 0.9;
+            // Boxing stance - wider, staggered foot position
+            if (this.boxingStance) {
+                this.footworkTime += deltaTime * 2;
+                
+                // Subtle weight shifting and bouncing
+                const bounce = Math.sin(this.footworkTime) * 0.08;
+                const weightShift = Math.sin(this.footworkTime * 0.5) * 0.1;
+                
+                // Left leg slightly forward in orthodox stance
+                this.meshes.leftUpperLeg.position.set(
+                    torsoPos.x - 0.25,
+                    torsoPos.y - 0.45 + bounce,
+                    torsoPos.z + 0.15 + weightShift
+                );
+                this.meshes.leftUpperLeg.rotation.x = 0.1;
+                
+                this.meshes.leftLowerLeg.position.set(
+                    torsoPos.x - 0.25,
+                    torsoPos.y - 1.35 + bounce,
+                    torsoPos.z + 0.2 + weightShift
+                );
+                this.meshes.leftLowerLeg.rotation.x = 0.05;
+                
+                this.meshes.leftFoot.position.set(
+                    torsoPos.x - 0.25,
+                    torsoPos.y - 2.0 + bounce * 0.5,
+                    torsoPos.z + 0.25 + weightShift
+                );
+                this.meshes.leftFoot.rotation.x = 0;
+                
+                // Right leg back in orthodox stance
+                this.meshes.rightUpperLeg.position.set(
+                    torsoPos.x + 0.25,
+                    torsoPos.y - 0.45 + bounce,
+                    torsoPos.z - 0.15 - weightShift
+                );
+                this.meshes.rightUpperLeg.rotation.x = -0.05;
+                
+                this.meshes.rightLowerLeg.position.set(
+                    torsoPos.x + 0.25,
+                    torsoPos.y - 1.35 + bounce,
+                    torsoPos.z - 0.2 - weightShift
+                );
+                this.meshes.rightLowerLeg.rotation.x = 0.05;
+                
+                this.meshes.rightFoot.position.set(
+                    torsoPos.x + 0.25,
+                    torsoPos.y - 2.0 + bounce * 0.5,
+                    torsoPos.z - 0.25 - weightShift
+                );
+                this.meshes.rightFoot.rotation.x = 0;
+            } else {
+                // Default neutral standing position
+                this.meshes.leftUpperLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 0.45, torsoPos.z);
+                this.meshes.leftUpperLeg.rotation.x *= 0.9;
+                
+                this.meshes.leftLowerLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 1.35, torsoPos.z);
+                this.meshes.leftLowerLeg.rotation.x *= 0.9;
+                
+                this.meshes.leftFoot.position.set(torsoPos.x - 0.2, torsoPos.y - 2.0, torsoPos.z);
+                this.meshes.leftFoot.rotation.x *= 0.9;
+                
+                this.meshes.rightUpperLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 0.45, torsoPos.z);
+                this.meshes.rightUpperLeg.rotation.x *= 0.9;
+                
+                this.meshes.rightLowerLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 1.35, torsoPos.z);
+                this.meshes.rightLowerLeg.rotation.x *= 0.9;
+                
+                this.meshes.rightFoot.position.set(torsoPos.x + 0.2, torsoPos.y - 2.0, torsoPos.z);
+                this.meshes.rightFoot.rotation.x *= 0.9;
+            }
+        }
+        
+        // Apply head bobbing and weaving for boxing
+        this.updateBoxingHeadMovement(deltaTime);
+    }
+    
+    updateBoxingHeadMovement(deltaTime) {
+        // Apply subtle head bobbing and weaving when in boxing stance
+        if (!this.isKnockedOut && this.boxingStance && this.bodies.head) {
+            const head = this.bodies.head;
+            const torso = this.bodies.torso;
             
-            this.meshes.leftLowerLeg.position.set(torsoPos.x - 0.2, torsoPos.y - 1.35, torsoPos.z);
-            this.meshes.leftLowerLeg.rotation.x *= 0.9;
+            this.headBobTime += deltaTime * 3;
             
-            this.meshes.leftFoot.position.set(torsoPos.x - 0.2, torsoPos.y - 2.0, torsoPos.z);
-            this.meshes.leftFoot.rotation.x *= 0.9;
+            // Subtle head movement - bobbing (up/down) and weaving (side to side)
+            const bobAmount = Math.sin(this.headBobTime) * 0.05;
+            const weaveAmount = Math.sin(this.headBobTime * 0.7) * 0.08;
             
-            this.meshes.rightUpperLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 0.45, torsoPos.z);
-            this.meshes.rightUpperLeg.rotation.x *= 0.9;
+            // Apply small forces to create natural head movement
+            if (this.currentAnimation === 'idle') {
+                const targetPos = new CANNON.Vec3(
+                    torso.position.x + weaveAmount,
+                    torso.position.y + 1.3 + bobAmount,
+                    torso.position.z
+                );
+                
+                const diff = new CANNON.Vec3();
+                targetPos.vsub(head.position, diff);
+                
+                // Gentle force for subtle movement
+                head.applyForce(diff.scale(5), head.position);
+            }
+        }
+    }
+    
+    updateBoxingGuard() {
+        // Position arms in boxing guard when idle and not attacking
+        if (this.isKnockedOut || this.punchTimer > 0 || this.kickTimer > 0) return;
+        
+        const leftHand = this.bodies.leftHand;
+        const rightHand = this.bodies.rightHand;
+        const leftForearm = this.bodies.leftForearm;
+        const rightForearm = this.bodies.rightForearm;
+        const torso = this.bodies.torso;
+        
+        if (!leftHand || !rightHand || !torso) return;
+        
+        // Get facing direction
+        const direction = new CANNON.Vec3(0, 0, 1);
+        torso.quaternion.vmult(direction, direction);
+        
+        if (this.boxingStance && this.currentAnimation === 'idle') {
+            // Boxing guard position - hands up protecting face
+            // Left hand (jab hand) - extended slightly forward
+            const leftGuardPos = new CANNON.Vec3(
+                torso.position.x - 0.4 + direction.x * 0.3,
+                torso.position.y + 0.8,
+                torso.position.z - 0.4 + direction.z * 0.3
+            );
             
-            this.meshes.rightLowerLeg.position.set(torsoPos.x + 0.2, torsoPos.y - 1.35, torsoPos.z);
-            this.meshes.rightLowerLeg.rotation.x *= 0.9;
+            const leftDiff = new CANNON.Vec3();
+            leftGuardPos.vsub(leftHand.position, leftDiff);
+            leftHand.applyForce(leftDiff.scale(40), leftHand.position);
             
-            this.meshes.rightFoot.position.set(torsoPos.x + 0.2, torsoPos.y - 2.0, torsoPos.z);
-            this.meshes.rightFoot.rotation.x *= 0.9;
+            // Right hand (power hand) - closer to chin
+            const rightGuardPos = new CANNON.Vec3(
+                torso.position.x + 0.35 + direction.x * 0.1,
+                torso.position.y + 0.9,
+                torso.position.z + 0.35 + direction.z * 0.1
+            );
+            
+            const rightDiff = new CANNON.Vec3();
+            rightGuardPos.vsub(rightHand.position, rightDiff);
+            rightHand.applyForce(rightDiff.scale(40), rightHand.position);
+            
+            // Position forearms to support guard
+            if (leftForearm) {
+                const leftForearmPos = new CANNON.Vec3(
+                    torso.position.x - 0.3 + direction.x * 0.2,
+                    torso.position.y + 0.4,
+                    torso.position.z - 0.3 + direction.z * 0.2
+                );
+                const forearmDiff = new CANNON.Vec3();
+                leftForearmPos.vsub(leftForearm.position, forearmDiff);
+                leftForearm.applyForce(forearmDiff.scale(25), leftForearm.position);
+            }
+            
+            if (rightForearm) {
+                const rightForearmPos = new CANNON.Vec3(
+                    torso.position.x + 0.3 + direction.x * 0.05,
+                    torso.position.y + 0.5,
+                    torso.position.z + 0.3 + direction.z * 0.05
+                );
+                const forearmDiff = new CANNON.Vec3();
+                rightForearmPos.vsub(rightForearm.position, forearmDiff);
+                rightForearm.applyForce(forearmDiff.scale(25), rightForearm.position);
+            }
         }
     }
     
@@ -766,7 +958,40 @@ class HybridCharacter {
             return;
         }
         
-        // Choose attack
+        // Boxing footwork - circle around opponent when in range
+        if (distance > 2.5 && distance < 4.5 && this.punchTimer === 0 && this.kickTimer === 0) {
+            const direction = new CANNON.Vec3();
+            this.aiTarget.body.position.vsub(this.body.position, direction);
+            direction.y = 0;
+            direction.normalize();
+            
+            // Get perpendicular direction for circling
+            const circleDir = new CANNON.Vec3(-direction.z, 0, direction.x);
+            
+            // Randomly circle left or right
+            const circleDirection = Math.random() > 0.5 ? 1 : -1;
+            circleDir.scale(circleDirection, circleDir);
+            
+            // Apply lateral movement force (boxing footwork)
+            const lateralForce = this.LATERAL_MOVEMENT_BASE_FORCE * this.speed;
+            this.body.applyForce(
+                new CANNON.Vec3(circleDir.x * lateralForce, 0, circleDir.z * lateralForce),
+                this.body.position
+            );
+            
+            // Also move slightly forward/backward randomly
+            const approachRetreat = (Math.random() - 0.5) * 0.3;
+            this.body.applyForce(
+                new CANNON.Vec3(direction.x * lateralForce * approachRetreat, 0, direction.z * lateralForce * approachRetreat),
+                this.body.position
+            );
+            
+            // Keep facing opponent while circling
+            const targetAngle = Math.atan2(direction.x, direction.z);
+            this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), targetAngle);
+        }
+        
+        // Choose attack when in close range
         if (Math.random() < 0.65) {
             this.punch();
         } else {
@@ -858,31 +1083,134 @@ class HybridCharacter {
         }
     }
     
-    punch() {
+    punch(punchType = null) {
+        // Determine punch type - use provided or choose based on context
+        if (punchType) {
+            this.punchType = punchType;
+        } else {
+            // AI chooses punch type based on combo and random
+            const currentTime = this.animationTime;
+            const timeSinceLastPunch = currentTime - this.lastPunchTime;
+            
+            if (timeSinceLastPunch < 1.0 && this.comboCount < 3) {
+                // Combo punching - alternate between jab and cross
+                this.comboCount++;
+                this.punchType = this.comboCount % 2 === 1 ? 'jab' : 'cross';
+            } else {
+                // Reset combo, choose randomly
+                this.comboCount = 1;
+                const rand = Math.random();
+                if (rand < 0.4) {
+                    this.punchType = 'jab';
+                } else if (rand < 0.7) {
+                    this.punchType = 'cross';
+                } else if (rand < 0.85) {
+                    this.punchType = 'hook';
+                } else {
+                    this.punchType = 'uppercut';
+                }
+            }
+            this.lastPunchTime = currentTime;
+        }
+        
         this.currentAnimation = 'punching';
-        this.punchTimer = 15; // ~250ms at 60fps for more realistic wind-up
+        
+        // Different timing for different punches
+        switch (this.punchType) {
+            case 'jab':
+                this.punchTimer = 12; // Fast jab
+                break;
+            case 'cross':
+                this.punchTimer = 15; // Standard punch
+                break;
+            case 'hook':
+                this.punchTimer = 18; // Wider swing
+                break;
+            case 'uppercut':
+                this.punchTimer = 16; // Powerful uppercut
+                break;
+            default:
+                this.punchTimer = 15;
+        }
         
         // Store direction for animation
         const direction = new CANNON.Vec3(0, 0, 1);
         this.body.quaternion.vmult(direction, direction);
         this.punchDirection = direction.clone();
         
+        // Choose which hand based on punch type
+        const hand = (this.punchType === 'jab') ? this.bodies.leftHand : this.bodies.rightHand;
+        this.punchHand = (this.punchType === 'jab') ? 'left' : 'right';
+        
         // Store position for hit check (will be updated during animation)
-        this.punchHitPos = this.bodies.rightHand.position.clone();
+        if (hand) {
+            this.punchHitPos = hand.position.clone();
+        }
     }
     
     updatePunchAnimation() {
-        // Boxing-style punch with wind-up throughout the animation
-        const hand = this.bodies.rightHand;
-        const forearm = this.bodies.rightForearm;
-        const upperArm = this.bodies.rightUpperArm;
+        // Boxing-style punch with different animations per type
+        const isLeftPunch = this.punchHand === 'left';
+        const hand = isLeftPunch ? this.bodies.leftHand : this.bodies.rightHand;
+        const forearm = isLeftPunch ? this.bodies.leftForearm : this.bodies.rightForearm;
+        const upperArm = isLeftPunch ? this.bodies.leftUpperArm : this.bodies.rightUpperArm;
         
         if (!hand || !forearm || !upperArm || !this.punchDirection) return;
         
         const direction = this.punchDirection;
+        const halfTime = Math.floor(this.punchTimer / 2);
         
-        // Wind-up phase - pull arm back (frames 15-10)
-        if (this.punchTimer > 10) {
+        // Different punch mechanics based on type
+        switch (this.punchType) {
+            case 'jab':
+                this.animateJab(hand, forearm, upperArm, direction, halfTime);
+                break;
+            case 'cross':
+                this.animateCross(hand, forearm, upperArm, direction, halfTime);
+                break;
+            case 'hook':
+                this.animateHook(hand, forearm, upperArm, direction, halfTime);
+                break;
+            case 'uppercut':
+                this.animateUppercut(hand, forearm, upperArm, direction, halfTime);
+                break;
+            default:
+                this.animateCross(hand, forearm, upperArm, direction, halfTime);
+        }
+        
+        // Update hit position at peak extension (60% through the punch for optimal timing)
+        if (this.punchTimer === Math.floor(halfTime * this.HIT_TIMING_FACTOR)) {
+            this.punchHitPos = hand.position.clone();
+        }
+    }
+    
+    animateJab(hand, forearm, upperArm, direction, halfTime) {
+        // Fast, straight punch - minimal wind-up
+        if (this.punchTimer > halfTime) {
+            // Quick pull back
+            const pullBackForce = 180;
+            hand.applyForce(
+                new CANNON.Vec3(-direction.x * pullBackForce, 0, -direction.z * pullBackForce),
+                hand.position
+            );
+        } else {
+            // Explosive straight extension
+            const punchForce = 500 * this.strength;
+            hand.applyForce(
+                new CANNON.Vec3(direction.x * punchForce, 15, direction.z * punchForce),
+                hand.position
+            );
+            forearm.applyForce(
+                new CANNON.Vec3(direction.x * punchForce * 0.6, 0, direction.z * punchForce * 0.6),
+                forearm.position
+            );
+        }
+    }
+    
+    animateCross(hand, forearm, upperArm, direction, halfTime) {
+        // Power punch with body rotation
+        if (this.punchTimer > halfTime) {
+            // Wind-up with hip rotation
             const pullBackForce = 250;
             hand.applyForce(
                 new CANNON.Vec3(-direction.x * pullBackForce, 0, -direction.z * pullBackForce),
@@ -892,10 +1220,11 @@ class HybridCharacter {
                 new CANNON.Vec3(-direction.x * pullBackForce * 0.5, 0, -direction.z * pullBackForce * 0.5),
                 forearm.position
             );
-        } 
-        // Punch extension phase - explosive forward motion (frames 10-0)
-        else {
-            const punchForce = 600 * this.strength;
+            // Rotate body for power
+            this.body.angularVelocity.y += 0.08;
+        } else {
+            // Explosive forward with full body rotation
+            const punchForce = 700 * this.strength;
             hand.applyForce(
                 new CANNON.Vec3(direction.x * punchForce, 20, direction.z * punchForce),
                 hand.position
@@ -908,16 +1237,76 @@ class HybridCharacter {
                 new CANNON.Vec3(direction.x * punchForce * 0.3, 0, direction.z * punchForce * 0.3),
                 upperArm.position
             );
+            this.body.angularVelocity.y -= 0.05; // Counter-rotation
         }
+    }
+    
+    animateHook(hand, forearm, upperArm, direction, halfTime) {
+        // Wide, circular punch
+        // Get perpendicular direction for hook
+        const hookDir = new CANNON.Vec3(-direction.z, 0, direction.x);
+        const handSide = (this.punchHand === 'left') ? 1 : -1;
+        hookDir.scale(handSide, hookDir);
         
-        // Very slight body rotation for power - minimal to avoid flying
-        if (this.punchTimer > 10) {
-            this.body.angularVelocity.y += 0.05;
+        if (this.punchTimer > halfTime) {
+            // Pull back and to the side
+            const pullBackForce = 200;
+            hand.applyForce(
+                new CANNON.Vec3(
+                    (-direction.x - hookDir.x) * pullBackForce,
+                    0,
+                    (-direction.z - hookDir.z) * pullBackForce
+                ),
+                hand.position
+            );
+        } else {
+            // Swing in arc
+            const hookForce = 650 * this.strength;
+            hand.applyForce(
+                new CANNON.Vec3(
+                    (direction.x + hookDir.x) * hookForce,
+                    25,
+                    (direction.z + hookDir.z) * hookForce
+                ),
+                hand.position
+            );
+            forearm.applyForce(
+                new CANNON.Vec3(hookDir.x * hookForce * 0.4, 0, hookDir.z * hookForce * 0.4),
+                forearm.position
+            );
+            // Strong body rotation for hook
+            this.body.angularVelocity.y += handSide * 0.12;
         }
-        
-        // Update hit position for peak extension
-        if (this.punchTimer === 5) {
-            this.punchHitPos = hand.position.clone();
+    }
+    
+    animateUppercut(hand, forearm, upperArm, direction, halfTime) {
+        // Upward punch from low position
+        if (this.punchTimer > halfTime) {
+            // Crouch and pull back
+            const pullBackForce = 220;
+            hand.applyForce(
+                new CANNON.Vec3(-direction.x * pullBackForce, -150, -direction.z * pullBackForce),
+                hand.position
+            );
+            // Slight crouch
+            this.body.applyForce(new CANNON.Vec3(0, -100, 0), this.body.position);
+        } else {
+            // Explosive upward punch
+            const upperForce = 600 * this.strength;
+            hand.applyForce(
+                new CANNON.Vec3(direction.x * upperForce * 0.3, upperForce * 1.2, direction.z * upperForce * 0.3),
+                hand.position
+            );
+            forearm.applyForce(
+                new CANNON.Vec3(direction.x * upperForce * 0.2, upperForce * 0.8, direction.z * upperForce * 0.2),
+                forearm.position
+            );
+            upperArm.applyForce(
+                new CANNON.Vec3(0, upperForce * 0.4, 0),
+                upperArm.position
+            );
+            // Rise from crouch
+            this.body.applyForce(new CANNON.Vec3(0, 250, 0), this.body.position);
         }
     }
     
@@ -999,6 +1388,39 @@ class HybridCharacter {
         if (this.health <= 0 && !this.isKnockedOut) {
             this.knockout();
         }
+        
+        // Chance to dodge/slip punches when in boxing stance (reactive defense)
+        if (this.boxingStance && Math.random() < this.SLIP_PROBABILITY && !this.isKnockedOut) {
+            this.performSlip();
+        }
+    }
+    
+    performSlip() {
+        // Boxing slip/dodge movement - quick lateral head movement
+        if (!this.bodies.head || this.punchTimer > 0 || this.kickTimer > 0) return;
+        
+        // Quick slip to the side
+        const slipDirection = Math.random() > 0.5 ? 1 : -1;
+        const slipForce = 300;
+        
+        // Get facing direction
+        const forward = new CANNON.Vec3(0, 0, 1);
+        this.body.quaternion.vmult(forward, forward);
+        
+        // Perpendicular for slip
+        const slipDir = new CANNON.Vec3(-forward.z * slipDirection, 0, forward.x * slipDirection);
+        
+        // Quick head movement
+        this.bodies.head.applyImpulse(
+            new CANNON.Vec3(slipDir.x * slipForce, 0, slipDir.z * slipForce),
+            this.bodies.head.position
+        );
+        
+        // Slight body lean
+        this.body.applyImpulse(
+            new CANNON.Vec3(slipDir.x * 50, 0, slipDir.z * 50),
+            this.body.position
+        );
     }
     
     knockout() {
